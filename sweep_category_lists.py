@@ -1,26 +1,23 @@
 #!/usr/bin/python3
+# Drops the names in the category lists that aren't in the Arch repositories.
+# (Flatpak entries are kept.) Apps also land in categories from their AppStream data,
+# so these lists only need the packages that have none.
 
 import os
-import apt
-os.chdir("usr/share/linuxmint/mintinstall/categories")
+import subprocess
 
+os.chdir("usr/share/shale-software/categories")
 
-c = apt.Cache()
+available = set(subprocess.run(["pacman", "-Ssq", ""], capture_output=True, text=True,
+                               env={**os.environ, "LC_ALL": "C"}).stdout.split())
 
-for file in os.listdir():
+for file in sorted(os.listdir()):
     new = []
-    with open(os.path.join(os.getcwd(), file)) as f:
+    with open(file) as f:
         for line in f:
-            if line.startswith("flatpak:"):
+            if line.startswith("flatpak:") or line == "\n" or line.rstrip() in available:
                 new.append(line)
-                continue
-            if line == "\n":
-                new.append(line)
-                continue
-            try:
-                pkg = c[line.rstrip()]
-                new.append(line)
-            except KeyError as e:
-                print(f"missing {line}", end="")
-    with open(os.path.join(os.getcwd(), file), "w") as f:
+            else:
+                print(f"missing {file}: {line}", end="")
+    with open(file, "w") as f:
         f.write("".join(new))

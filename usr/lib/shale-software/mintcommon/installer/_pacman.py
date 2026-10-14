@@ -36,17 +36,33 @@ CRITICAL_PACKAGES = {"base", "linux", "linux-lts", "linux-zen", "linux-firmware"
                      "polkit", "systemd", "sddm", "plasma-desktop", "plasma-workspace", "kwin",
                      "networkmanager", "mesa", "pipewire", "python", "python-gobject", "flatpak"}
 
-# Freedesktop categories -> the section names mintinstall builds its categories from
-# (Debian's sections, see Application.build_categories). First match wins.
-SECTION_FOR_CATEGORY = (
-    ("WebBrowser", "web"), ("Email", "mail"), ("InstantMessaging", "net"), ("Chat", "net"),
-    ("IRCClient", "net"), ("FileTransfer", "net"), ("P2P", "net"), ("Game", "games"),
-    ("Music", "sound"), ("Audio", "sound"), ("Video", "video"), ("AudioVideo", "video"),
-    ("Photography", "graphics"), ("Graphics", "graphics"), ("WordProcessor", "office"),
-    ("Spreadsheet", "office"), ("Office", "office"), ("TextEditor", "editors"),
-    ("Math", "math"), ("Science", "science"), ("Electronics", "electronics"),
-    ("Education", "education"), ("Development", "devel"), ("Network", "net"),
-    ("Settings", "system"), ("System", "system"), ("Utility", "utils"),
+# Freedesktop categories (from AppStream) -> the section names the Software Manager files
+# its categories under (see Application.add_categories). An app goes into every section it
+# matches; the generic ones below only count when nothing more specific in the same group
+# did, so a board game isn't also listed as just "a game".
+SECTIONS = (
+    (("WebBrowser",), "web"), (("Email",), "mail"),
+    (("InstantMessaging", "Chat", "IRCClient", "VideoConference", "Telephony"), "chat"),
+    (("FileTransfer", "P2P"), "filesharing"),
+    (("Audio", "Music"), "sound"), (("Video", "Player", "TV"), "video"),
+    (("3DGraphics",), "3d"), (("2DGraphics", "RasterGraphics", "VectorGraphics"), "drawing"),
+    (("Photography",), "photo"), (("Publishing",), "publishing"), (("Scanning", "OCR"), "scanning"),
+    (("Viewer",), "viewers"),
+    (("Office", "WordProcessor", "Spreadsheet", "Presentation", "TextEditor"), "office"),
+    (("BoardGame", "CardGame", "LogicGame"), "board"), (("Shooter",), "fps"),
+    (("StrategyGame",), "rts"), (("Emulator",), "emulator"), (("Simulation", "SportsGame"), "sim"),
+    (("Science", "Physics", "Chemistry", "Biology", "Astronomy"), "science"), (("Math",), "math"),
+    (("Education",), "education"), (("Electronics",), "electronics"),
+    (("Development", "IDE"), "devel"),
+)
+GENERIC_SECTIONS = (
+    ("Network", "net", {"web", "mail", "chat", "filesharing"}),
+    ("AudioVideo", "video", {"sound", "video"}),
+    ("Graphics", "graphics", {"3d", "drawing", "photo", "publishing", "scanning", "viewers"}),
+    ("Game", "games", {"board", "fps", "rts", "tbs", "emulator", "sim"}),
+    ("Utility", "utils", None),
+    ("Settings", "system", None),
+    ("System", "system", None),
 )
 FONT_PREFIXES = ("ttf-", "otf-", "noto-fonts", "adobe-source-", "cantarell-fonts", "gnu-free-fonts")
 
@@ -200,13 +216,16 @@ def get_components():
     return _components
 
 
-def section_for(name, categories):
+def sections_for(name, categories):
     if name.startswith(FONT_PREFIXES):
-        return "fonts"
-    for category, section in SECTION_FOR_CATEGORY:
-        if category in categories:
-            return section
-    return None
+        return ["fonts"]
+    found = [section for cats, section in SECTIONS if any(c in categories for c in cats)]
+    for category, section, specific in GENERIC_SECTIONS:
+        if category in categories and section not in found:
+            # Utility and System only when the app fits nowhere else.
+            if (specific is None and not found) or (specific and not specific & set(found)):
+                found.append(section)
+    return found
 
 
 # ── Package database ─────────────────────────────────────────────────────────────
@@ -274,8 +293,7 @@ def process_full_pacman_db(cache):
             continue
 
         pkg_hash = make_pkg_hash(pkg)
-        section = section_for(name, components[name][1] if name in components else [])
-        if section:
+        for section in sections_for(name, components[name][1] if name in components else []):
             sections.setdefault(section, []).append(pkg_hash)
 
         cache[pkg_hash] = PacmanPkgInfo(pkg_hash, pkg)

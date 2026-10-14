@@ -2029,9 +2029,11 @@ class Application(Gtk.Application):
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/internet-email.list")
 
         subcat = Category(_("Chat"), category, self.categories, "mintinstall-chat-symbolic")
+        self.sections["chat"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/internet-chat.list")
 
         subcat = Category(_("File sharing"), category, self.categories, "mintinstall-share-symbolic")
+        self.sections["filesharing"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/internet-filesharing.list")
 
         self.root_categories[category.name] = category
@@ -2051,16 +2053,22 @@ class Application(Gtk.Application):
         category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics.list")
 
         subcat = Category(_("3D"), category, self.categories, "mintinstall-3d-symbolic")
+        self.sections["3d"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-3d.list")
         subcat = Category(_("Drawing"), category, self.categories, "mintinstall-drawing-symbolic")
+        self.sections["drawing"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-drawing.list")
         subcat = Category(_("Photography"), category, self.categories, "mintinstall-photo-symbolic")
+        self.sections["photo"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-photography.list")
         subcat = Category(_("Publishing"), category, self.categories, "mintinstall-publishing-symbolic")
+        self.sections["publishing"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-publishing.list")
         subcat = Category(_("Scanning"), category, self.categories, "mintinstall-scanning-symbolic")
+        self.sections["scanning"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-scanning.list")
         subcat = Category(_("Viewers"), category, self.categories, "mintinstall-viewers-symbolic")
+        self.sections["viewers"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-viewers.list")
         self.root_categories[category.name] = category
 
@@ -2076,16 +2084,22 @@ class Application(Gtk.Application):
         category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games.list")
 
         subcat = Category(_("Board games"), category, self.categories, "mintinstall-board-symbolic")
+        self.sections["board"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-board.list")
         subcat = Category(_("First-person"), category, self.categories, "mintinstall-fps-symbolic")
+        self.sections["fps"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-fps.list")
         subcat = Category(_("Real-time strategy"), category, self.categories, "mintinstall-rts-symbolic")
+        self.sections["rts"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-rts.list")
         subcat = Category(_("Turn-based strategy"), category, self.categories, "mintinstall-tbs-symbolic")
+        self.sections["tbs"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-tbs.list")
         subcat = Category(_("Emulators"), category, self.categories, "mintinstall-emulator-symbolic")
+        self.sections["emulator"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-emulators.list")
         subcat = Category(_("Simulation and racing"), category, self.categories, "mintinstall-sim-symbolic")
+        self.sections["sim"] = subcat
         subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-simulations.list")
         self.root_categories[category.name] = category
 

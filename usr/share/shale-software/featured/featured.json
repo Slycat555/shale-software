@@ -5,7 +5,7 @@
     "text_color": "#3C2C1C"
   },
   {
-    "name": "sublime-text",
+    "name": "flatpak:com.sublimetext.three",
     "background": "radial-gradient(#7a4700 0.65px, #505050 0.65px) 0 0 / 13px 13px repeat, #ff9800",
     "text_color": "#f0f0f0"
   },
@@ -30,7 +30,7 @@
     "text_color": "#414141"
   },
   {
-    "name": "spotify-client",
+    "name": "flatpak:com.spotify.Client",
     "background": "linear-gradient(to top, #31d565, #1ed760)",
     "text_color": "#fffeff"
   },
@@ -45,12 +45,12 @@
     "text_color": "#E6F3FC"
   },
   {
-    "name": "steam-installer",
+    "name": "flatpak:com.valvesoftware.Steam",
     "background": "radial-gradient(#6FBCE8 0.65px, transparent 0.65px) 0 0 / 13px 13px repeat, linear-gradient(to right, #11273D, #194761, #11273D), #11273D",
     "text_color": "#ffffff"
   },
   {
-    "name": "dropbox",
+    "name": "flatpak:com.dropbox.Client",
     "background": "linear-gradient(to left, #004391, #1b63ad)",
     "text_color": "#ececec"
   },
@@ -60,7 +60,7 @@
     "text_color": "#fffefb"
   },
   {
-    "name": "google-earth-pro-stable",
+    "name": "flatpak:com.google.EarthPro",
     "background": "linear-gradient(to right, #013364, #024b90)",
     "text_color": "#ffffff"
   },
