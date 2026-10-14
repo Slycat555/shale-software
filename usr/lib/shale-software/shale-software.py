@@ -86,7 +86,7 @@ ALIASES['sublime-text'] = "Sublime"
 ALIASES['firefox'] = "Firefox"
 ALIASES['vlc'] = "VLC"
 ALIASES['mpv'] = "Mpv"
-ALIASES['gimp'] = "Gimp"
+ALIASES['gimp'] = "GIMP"
 ALIASES['gnome-maps'] = "GNOME Maps"
 ALIASES['thunderbird'] = "Thunderbird"
 ALIASES['pia-manager'] = "PIA Manager"
@@ -473,8 +473,9 @@ class PackageTile(Gtk.FlowBoxChild):
                 self.package_type_emblem.hide()
 
         if self.pkginfo.verified:
-            self.builder.get_object("review_info_box").show()
+            # Shale has no reviews, so the rating only shows if there ever are some.
             if self.review_info:
+                self.builder.get_object("review_info_box").show()
                 self.fill_rating_widget(self.review_info)
         else:
             self.builder.get_object("unsafe_box").show()
@@ -2184,10 +2185,10 @@ class Application(Gtk.Application):
         else:
             fp_hashes = []
 
-        apt_cache = installer._apt.get_apt_cache()
-        apt_hashes = [installer._apt.make_pkg_hash(pkg) for pkg in apt_cache if pkg.installed]
+        pacman_db = installer._pacman.get_pacman_db()
+        pacman_hashes = [installer._pacman.make_pkg_hash(pkg) for pkg in pacman_db.values() if pkg.installed_version]
 
-        return apt_hashes + fp_hashes
+        return pacman_hashes + fp_hashes
 
     @print_timing
     def process_matching_packages(self):

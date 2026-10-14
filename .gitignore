@@ -17,3 +17,9 @@ __pycache__/
 .render.py
 build/
 .icon-*.png
+.snap.py
+.run.log
+.shot*.png
+pkg/
+src/
+*.pkg.tar.zst

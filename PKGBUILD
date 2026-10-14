@@ -1,6 +1,6 @@
 # Builds Shale Software from this checkout: makepkg -si
 pkgname=shale-software
-pkgver=8.4.1
+pkgver=8.4.1.r.
 pkgrel=1
 pkgdesc="Software Manager for Shale Linux: apps from Flathub and the Arch repositories (Linux Mint's mintinstall, for pacman)"
 arch=(any)
@@ -13,7 +13,12 @@ optdepends=('timeshift: restore point before updates that come with an install (
 makedepends=(glib2)
 
 pkgver() {
-    printf '8.4.1.r%s.%s' "$(git -C "$startdir" rev-list --count HEAD)" "$(git -C "$startdir" rev-parse --short HEAD)"
+    # 8.4.1.rN.HASH from the checkout, or plain 8.4.1 without git.
+    if command -v git >/dev/null && git -C "$startdir" rev-parse HEAD >/dev/null 2>&1; then
+        printf '8.4.1.r%s.%s' "$(git -C "$startdir" rev-list --count HEAD)" "$(git -C "$startdir" rev-parse --short HEAD)"
+    else
+        echo 8.4.1
+    fi
 }
 
 build() {

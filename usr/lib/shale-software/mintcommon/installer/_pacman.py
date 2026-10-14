@@ -13,7 +13,9 @@ same code that reads Flathub's.
 import json
 import os
 import re
+import select
 import subprocess
+import tempfile
 import threading
 
 import gi
@@ -79,8 +81,15 @@ def capitalize(string):
 
 
 def run_pacman(*args):
-    return subprocess.run(["pacman", *args], capture_output=True, text=True,
-                          env={**os.environ, "LC_ALL": "C"})
+    # Output goes through temporary files, not pipes: GTK's image loader (glycin) starts
+    # sandboxed helpers from other threads that can inherit a pipe's write end and keep
+    # it open, so reading to the end of a pipe could wait forever after pacman is done.
+    with tempfile.TemporaryFile("w+") as out, tempfile.TemporaryFile("w+") as err:
+        rc = subprocess.run(["pacman", *args], stdin=subprocess.DEVNULL, stdout=out, stderr=err,
+                            env={**os.environ, "LC_ALL": "C"}).returncode
+        out.seek(0)
+        err.seek(0)
+        return subprocess.CompletedProcess(args, rc, out.read(), err.read())
 
 
 def add_prefix(name):
@@ -201,6 +210,9 @@ class _SwcatalogPool(appstream_pool.Pool):
 
 
 _components = None
+# The pools own the xmlb silos the components' nodes point into, so they live as long
+# as the components do.
+_pools = []
 
 
 def get_components():
@@ -209,7 +221,9 @@ def get_components():
     if _components is None:
         components = {}
         for repo in REPOS:
-            for name, value in _SwcatalogPool(_SwcatalogRemote(repo)).components_by_pkgname().items():
+            pool = _SwcatalogPool(_SwcatalogRemote(repo))
+            _pools.append(pool)
+            for name, value in pool.components_by_pkgname().items():
                 components.setdefault(name, value)
         _components = components
         debug("Installer: %d Arch packages have AppStream data" % len(components))
@@ -468,18 +482,42 @@ def _run_helper(task):
     op = "install" if task.type == task.INSTALL_TASK else "remove"
     error = None
 
+    def on_line(line):
+        nonlocal error
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            return
+        if msg.get("type") == "progress":
+            _report(task, int(msg.get("progress", 0) * 100), msg.get("text", ""))
+        elif msg.get("type") == "error":
+            error = msg.get("text")
+
     try:
-        proc = subprocess.Popen(["pkexec", HELPER, op, task.pkginfo.name],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        for line in proc.stdout:
-            try:
-                msg = json.loads(line)
-            except ValueError:
-                continue
-            if msg.get("type") == "progress":
-                _report(task, int(msg.get("progress", 0) * 100), msg.get("text", ""))
-            elif msg.get("type") == "error":
-                error = msg.get("text")
+        proc = subprocess.Popen(["pkexec", HELPER, op, task.pkginfo.name], stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        # Read until the helper exits rather than until the pipe closes: another process
+        # may hold a copy of its write end (see run_pacman).
+        fd = proc.stdout.fileno()
+        buf = b""
+        while True:
+            ready, _, _ = select.select([fd], [], [], 0.5)
+            chunk = os.read(fd, 65536) if ready else b""
+            if chunk:
+                buf += chunk
+                *lines, buf = buf.split(b"\n")
+                for line in lines:
+                    on_line(line.decode(errors="replace"))
+            elif ready or proc.poll() is not None:
+                break
+        os.set_blocking(fd, False)
+        try:
+            buf += os.read(fd, 65536) or b""
+        except BlockingIOError:
+            pass
+        for line in buf.split(b"\n"):
+            on_line(line.decode(errors="replace"))
+        proc.stdout.close()
         rc = proc.wait()
     except OSError as e:
         error, rc = str(e), 1
