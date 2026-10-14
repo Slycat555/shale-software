@@ -6,10 +6,10 @@ import threading
 
 from gi.repository import GLib, GObject
 
-from . import _apt
+from . import _pacman
 from . import _flatpak
 from ._flatpak import FlatpakRemoteInfo
-from .pkgInfo import FlatpakPkgInfo, AptPkgInfo
+from .pkgInfo import FlatpakPkgInfo, PacmanPkgInfo
 from .misc import print_timing, debug, warn
 from typing import Optional
 
@@ -43,8 +43,8 @@ class JsonObject(object):
         for key in json_data["pkginfo_cache"].keys():
             pkginfo_data = json_data["pkginfo_cache"][key]
 
-            if pkginfo_data["pkg_hash"].startswith("a"):
-                pkgcache_dict[key] = AptPkgInfo.from_json(pkginfo_data)
+            if pkginfo_data["pkg_hash"].startswith("p"):
+                pkgcache_dict[key] = PacmanPkgInfo.from_json(pkginfo_data)
             else:
                 pkgcache_dict[key] = FlatpakPkgInfo.from_json(pkginfo_data)
 
@@ -140,8 +140,8 @@ class PkgCache(object):
         if self.have_flatpak and (self.cache_content in ("f", None) or self.status == self.STATUS_EMPTY):
             cache, flatpak_remote_infos = _flatpak.process_full_flatpak_installation(cache)
 
-        if self.cache_content in ("a", None) or self.status == self.STATUS_EMPTY:
-            cache, sections = _apt.process_full_apt_cache(cache)
+        if self.cache_content in ("p", None) or self.status == self.STATUS_EMPTY:
+            cache, sections = _pacman.process_full_pacman_db(cache)
 
         return cache, sections, flatpak_remote_infos
 
@@ -237,7 +237,7 @@ class PkgCache(object):
         path = self._get_best_save_path()
 
         FlatpakPkgInfo.__module__ = "installer.pkgInfo"
-        AptPkgInfo.__module__ = "installer.pkgInfo"
+        PacmanPkgInfo.__module__ = "installer.pkgInfo"
         FlatpakRemoteInfo.__module__ = "installer._flatpak"
 
         try:
@@ -252,14 +252,14 @@ class PkgCache(object):
 
         # If we're refreshing only a specific package type, don't destroy existing
         # items of the other type (otherwise if the cache is refreshed by mintupdate's
-        # flatpak updater mintinstall will end up starting without any apt package info
+        # flatpak updater mintinstall will end up starting without any pacman package info
         # and look broken).
         with self._item_lock:
             if self.cache_content == "f":
-                for key in [key for key in self._items.keys() if key.startswith("a")]:
+                for key in [key for key in self._items.keys() if key.startswith("p")]:
                     cache[key] = self._items[key]
                 sections = self.sections
-            elif self.cache_content == "a":
+            elif self.cache_content == "p":
                 for key in [key for key in self._items.keys() if key.startswith("f")]:
                     cache[key] = self._items[key]
 
@@ -295,12 +295,12 @@ class PkgCache(object):
         self._new_cache_common()
 
     def find_pkginfo(self, string, pkg_type=None, remote=None):
-        if pkg_type == "a" and not string.startswith("apt:"):
-            string = "apt:" + string
+        if pkg_type == "p" and not string.startswith("pacman:"):
+            string = "pacman:" + string
         try:
             return self[string]
         except KeyError:
-            if string[0:4] == "apt:":
+            if string.startswith("pacman:"):
                 return None
             if self.have_flatpak:
                 pkginfo = _flatpak.find_pkginfo(self, string, remote)
@@ -309,40 +309,20 @@ class PkgCache(object):
 
         return None
 
-    def _get_manually_installed_debs(self):
+    def _get_manually_installed_pacman(self):
         """
-        Generate list of manually installed Debian package.
-        Requires a package list provided by the installer.
-            Currently knows only Ubiquity's /var/log/installer/initial-status.gz
+        Packages the user installed explicitly (pacman -Qe) that are in the cache.
         """
-        installer_log = "/var/log/installer/initial-status.gz"
-        if not os.path.isfile(installer_log):
-            return None
-        import gzip
-        try:
-            installer_log = gzip.open(installer_log, "r").read().decode('utf-8').splitlines()
-        except Exception as e:
-            # There are a number of different exceptions here, but there's only one response
-            warn("Could not get initial installed packages list (check /var/log/installer/initial-status.gz): %s" % str(e))
-            return None
-        initial_status = [x[9:] for x in installer_log if x.startswith("Package: ")]
-        if not initial_status:
-            return None
-        from . import _apt
-        pkgcache = [x[4:] for x in self.get_subset_of_type("a")]
-        current_status = ["apt:%s" % pkg for pkg in _apt.get_apt_cache() if
-            (pkg.installed and
-            not pkg.is_auto_installed and
-            pkg.shortname not in initial_status and
-            pkg.shortname in pkgcache)]
-        return current_status
+        from . import _pacman
+        explicit = _pacman.run_pacman("-Qqe").stdout.split()
+        return ["pacman:%s" % name for name in explicit if "pacman:%s" % name in self]
 
     def get_manually_installed_packages(self):
-        """ Get list of all manually installed packages (apt and flatpak) """
+        """ Get list of all manually installed packages (pacman and flatpak) """
         installed_packages = None
-        installed_packages_apt = self._get_manually_installed_debs()
-        if installed_packages_apt:
-            installed_packages = installed_packages_apt
+        installed_packages_pacman = self._get_manually_installed_pacman()
+        if installed_packages_pacman:
+            installed_packages = installed_packages_pacman
             installed_packages += [x for x in self.get_subset_of_type("f")]
         return installed_packages
 

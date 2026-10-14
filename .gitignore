@@ -11,3 +11,5 @@ usr/share/linuxmint/mintinstall/*.glade~
 
 # cache files
 usr/lib/linuxmint/mintinstall/__pycache__
+__pycache__/
+.test_*.py

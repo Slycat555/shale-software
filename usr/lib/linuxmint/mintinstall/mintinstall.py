@@ -1240,7 +1240,7 @@ class Application(Gtk.Application):
                     continue
                 is_flatpak = True
             else:
-                pkginfo = self.installer.find_pkginfo(name, installer.PKG_TYPE_APT)
+                pkginfo = self.installer.find_pkginfo(name, installer.PKG_TYPE_PACMAN)
                 is_flatpak = False
 
             if pkginfo is None:
@@ -1427,7 +1427,7 @@ class Application(Gtk.Application):
                 if pkginfo is None or not pkginfo.verified:
                     continue
             else:
-                pkginfo = self.installer.find_pkginfo(name, installer.PKG_TYPE_APT)
+                pkginfo = self.installer.find_pkginfo(name, installer.PKG_TYPE_PACMAN)
             if pkginfo is None:
                 continue
             if pkginfo.name == self.banner_app_name:
@@ -1507,7 +1507,7 @@ class Application(Gtk.Application):
         p.wait_async(None, on_process_exited)
 
     def should_show_pkginfo(self, pkginfo):
-        if pkginfo.pkg_hash.startswith("apt"):
+        if pkginfo.pkg_hash.startswith("pacman"):
             return True
 
         if not self.settings.get_boolean(prefs.ALLOW_UNVERIFIED_FLATPAKS):
@@ -1607,14 +1607,14 @@ class Application(Gtk.Application):
     def modernize_installed_list(self, packages):
         """
         We can not rely on just the name of a package to guarantee uniqueness.
-        This works for apt but not flatpaks.  So we need to upgrade existing keys
+        This works for pacman but not flatpaks.  So we need to upgrade existing keys
         to store pkg_hashes rather than simple names.
         """
         return_list = []
 
         for item in packages:
-            if item.startswith(("apt:", "fp:")):
-                # pkg_hashes start with apt: or fp:, if items have this, they're up-to-date.
+            if item.startswith(("pacman:", "fp:")):
+                # pkg_hashes start with pacman: or fp:, if items have this, they're up-to-date.
                 return_list.append(item)
                 continue
 
@@ -2206,7 +2206,7 @@ class Application(Gtk.Application):
             for package_name in category.matchingPackages:
                 if package_name.startswith("fp"):
                     continue
-                pkginfo = self.installer.find_pkginfo(package_name, installer.PKG_TYPE_APT)
+                pkginfo = self.installer.find_pkginfo(package_name, installer.PKG_TYPE_PACMAN)
 
                 self.add_pkginfo_to_category(pkginfo, category)
 
@@ -2254,7 +2254,7 @@ class Application(Gtk.Application):
 
     def apply_aliases(self):
         for pkg_name in ALIASES.keys():
-            pkginfo = self.installer.cache.find_pkginfo(pkg_name, installer.PKG_TYPE_APT) # aliases currently only apply to apt
+            pkginfo = self.installer.cache.find_pkginfo(pkg_name, installer.PKG_TYPE_PACMAN) # aliases currently only apply to apt
 
             if pkginfo:
                 # print("Applying aliases: ", ALIASES[pkg_name], self.installer.get_display_name(pkginfo))
@@ -2528,7 +2528,7 @@ class Application(Gtk.Application):
             if package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_APT:
                 results = [p for p in searched_packages if not (p.pkg_hash.startswith("f") and p.name in hidden_packages)]
             elif package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_FLATPAK:
-                results = [p for p in searched_packages if not (p.pkg_hash.startswith("a") and p.name in hidden_packages)]
+                results = [p for p in searched_packages if not (p.pkg_hash.startswith("p") and p.name in hidden_packages)]
             else:
                 results = searched_packages
 
@@ -2985,7 +2985,7 @@ class Application(Gtk.Application):
     def get_deb_for_flatpak(self, pkginfo):
         try:
             deb_name = DEB_EQUIVS[pkginfo.name]
-            return self.installer.find_pkginfo(deb_name, installer.PKG_TYPE_APT)
+            return self.installer.find_pkginfo(deb_name, installer.PKG_TYPE_PACMAN)
         except:
             return None
 
@@ -3123,7 +3123,7 @@ class Application(Gtk.Application):
         exec_string = None
 
         if self.installer.pkginfo_is_installed(pkginfo):
-            if pkginfo.pkg_hash.startswith("a"):
+            if pkginfo.pkg_hash.startswith("p"):
                 for desktop_file in [
                     # foo.desktop
                     "/usr/share/applications/%s.desktop" % bin_name,

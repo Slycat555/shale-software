@@ -77,19 +77,21 @@ class PkgInfo:
         # Runtime categories
         self.categories = []
 
-class AptPkgInfo(PkgInfo):
-    def __init__(self, pkg_hash=None, apt_pkg=None):
-        super(AptPkgInfo, self).__init__(pkg_hash)
+class PacmanPkgInfo(PkgInfo):
+    """An Arch repository package. Display info comes from the package's AppStream
+    entry (archlinux-appstream-data) when it has one, otherwise from pacman."""
+    def __init__(self, pkg_hash=None, pac_pkg=None):
+        super(PacmanPkgInfo, self).__init__(pkg_hash)
 
-        # This is cheap.. but keeps from having an additional fp/apt check every time we check it.
+        # This is cheap.. but keeps from having an additional fp/pacman check every time we check it.
         self.verified = True
 
-        if apt_pkg:
-            self.name = apt_pkg.name
-            self.display_name = self.get_display_name(apt_pkg)
-            self.summary = self.get_summary(apt_pkg)
-            self.get_icon(48, apt_pkg)
-            self.get_icon(64, apt_pkg)
+        if pac_pkg:
+            self.name = pac_pkg.name
+            self.display_name = self.get_display_name(pac_pkg)
+            self.summary = self.get_summary(pac_pkg)
+            self.get_icon(48, pac_pkg)
+            self.get_icon(64, pac_pkg)
 
     @classmethod
     def from_json(cls, json_data:dict):
@@ -122,41 +124,34 @@ class AptPkgInfo(PkgInfo):
 
         return trimmed_dict
 
-    def get_display_name(self, apt_pkg=None):
+    def get_display_name(self, pac_pkg=None):
         # fastest
         if self.display_name:
             return self.display_name
 
-        if apt_pkg:
-            self.display_name = apt_pkg.name.capitalize()
+        if pac_pkg and pac_pkg.component:
+            self.display_name = pac_pkg.component.get_display_name()
 
         if not self.display_name:
             self.display_name = self.name.capitalize()
 
-        self.display_name = self.display_name.replace(":i386", "")
-
         return self.display_name
 
-    def get_summary(self, apt_pkg=None):
+    def get_summary(self, pac_pkg=None):
         # fastest
         if self.summary:
             return self.summary
 
-        if apt_pkg and apt_pkg.candidate:
-            candidate = apt_pkg.candidate
-
-            summary = ""
-            if candidate.summary is not None:
-                summary = candidate.summary
-
-                self.summary = capitalize(summary)
+        if pac_pkg:
+            summary = pac_pkg.component.get_summary() if pac_pkg.component else None
+            self.summary = capitalize(summary or pac_pkg.desc)
 
         if self.summary is None:
             self.summary = ""
 
         return self.summary
 
-    def get_description(self, apt_pkg=None, for_search=False):
+    def get_description(self, pac_pkg=None, for_search=False):
         # fastest
         if for_search and self.raw_description:
             return self.raw_description
@@ -167,8 +162,15 @@ class AptPkgInfo(PkgInfo):
                 self.description = xml_markup_convert_to_text(self.raw_description)
                 return self.description
 
-        if apt_pkg and apt_pkg.candidate and apt_pkg.candidate.description is not None:
-            self.raw_description = apt_pkg.candidate.description
+        description = None
+        if pac_pkg:
+            if pac_pkg.component:
+                description = pac_pkg.component.get_description()
+            if description is None:
+                description = pac_pkg.desc
+
+        if description is not None:
+            self.raw_description = description
             if not for_search:
                 self.description = xml_markup_convert_to_text(self.raw_description)
         else:
@@ -180,72 +182,92 @@ class AptPkgInfo(PkgInfo):
     def get_keywords(self):
         return ""
 
-    def get_icon(self, size=64, apt_pkg=None):
+    def get_icon(self, size=64, pac_pkg=None):
         try:
             return self.icon[size]
         except:
             pass
 
+        if pac_pkg and pac_pkg.component:
+            icon = pac_pkg.component.get_icon(size)
+            if icon and (icon.startswith("/") or Gtk.IconTheme.get_default().has_icon(icon)):
+                self.icon[size] = icon
+                return icon
+
         theme = Gtk.IconTheme.get_default()
 
-        for name in [self.name, self.name.split(":")[0], self.name.split("-")[0], self.name.split(".")[-1].lower()]:
+        for name in [self.name, self.name.split("-")[0], self.name.split(".")[-1].lower()]:
             if theme.has_icon(name):
                 self.icon[size] = name
                 return self.icon[size]
 
-        # Look in app-install-data and pixmaps
         for extension in ['svg', 'png', 'xpm']:
-            for suffix in ['', '-icon']:
-                icon_path = "/usr/share/app-install/icons/%s%s.%s" % (self.name, suffix, extension)
-                if os.path.exists(icon_path):
-                    self.icon[size] = icon_path
-                    return self.icon[size]
-
-                icon_path = "/usr/share/pixmaps/%s.%s" % (self.name, extension)
-                if os.path.exists(icon_path):
-                    self.icon[size] = icon_path
-                    return self.icon[size]
+            icon_path = "/usr/share/pixmaps/%s.%s" % (self.name, extension)
+            if os.path.exists(icon_path):
+                self.icon[size] = icon_path
+                return self.icon[size]
 
         return None
 
-    def get_screenshots(self, apt_pkg=None):
-        return [] # handled in mintinstall for now
+    def get_screenshots(self, pac_pkg=None):
+        if len(self.screenshots) > 0:
+            return self.screenshots
 
-    def get_version(self, apt_pkg=None):
+        if pac_pkg and pac_pkg.component:
+            self.screenshots = pac_pkg.component.get_screenshots()
+
+        return self.screenshots
+
+    def get_version(self, pac_pkg=None):
         if self.version:
             return self.version
 
-        if apt_pkg:
-            if apt_pkg.is_installed:
-                self.version = apt_pkg.installed.version
-            else:
-                if apt_pkg.candidate is not None:
-                    self.version = apt_pkg.candidate.version
+        if pac_pkg:
+            self.version = pac_pkg.installed_version or pac_pkg.version
 
         if self.version is None:
             self.version = ""
 
         return self.version
 
-    def get_homepage_url(self, apt_pkg=None):
+    def get_developer(self, pac_pkg=None):
+        if self.developer:
+            return self.developer
+
+        if pac_pkg and pac_pkg.component:
+            self.developer = pac_pkg.component.get_developer()
+
+        if self.developer is None:
+            return ""
+
+        return self.developer
+
+    def get_homepage_url(self, pac_pkg=None):
         if self.homepage_url:
             return self.homepage_url
 
-        if apt_pkg:
-            if apt_pkg.is_installed:
-                self.homepage_url = apt_pkg.installed.homepage
-            else:
-                if apt_pkg.candidate is not None:
-                    self.homepage_url = apt_pkg.candidate.homepage
+        if pac_pkg:
+            if pac_pkg.component:
+                self.homepage_url = pac_pkg.component.get_homepage_url()
+            if not self.homepage_url:
+                self.homepage_url = pac_pkg.get_url()
 
         if self.homepage_url is None:
             self.homepage_url = ""
 
         return self.homepage_url
 
-    def get_help_url(self, apt_pkg=None):
-        # We can only get the homepage from apt
-        return ""
+    def get_help_url(self, pac_pkg=None):
+        if self.help_url:
+            return self.help_url
+
+        if pac_pkg and pac_pkg.component:
+            self.help_url = pac_pkg.component.get_help_url()
+
+        if self.help_url is None:
+            return ""
+
+        return self.help_url
 
 class FlatpakPkgInfo(PkgInfo):
     def __init__(self, pkg_hash=None, remote=None, ref=None, remote_url=None, installed=False):

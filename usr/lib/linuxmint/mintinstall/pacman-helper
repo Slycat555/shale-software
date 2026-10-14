@@ -1,0 +1,135 @@
+#!/usr/bin/python3
+"""Root helper for the Software Manager: installs or removes one Arch package.
+
+Run through pkexec:  pacman-helper install|remove PACKAGE
+
+Installing brings the whole system up to date in the same step (pacman -Syu), the safe
+way to install on Arch, and takes a Shale Snapshots restore point first when there are
+updates, like Software Update does. Prints JSON-lines progress:
+    {"type": "progress", "progress": 0.4, "text": "..."}
+    {"type": "done"}
+    {"type": "error", "text": "..."}
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+NAME_RE = re.compile(r"^[a-z0-9@_+][a-z0-9@._+-]*$")
+
+
+def emit(kind, text="", **extra):
+    print(json.dumps({"type": kind, "text": text, **extra}), flush=True)
+
+
+def stream(cmd, on_line):
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            env={**os.environ, "LC_ALL": "C"})
+    buf = b""
+    tail = []
+    while True:
+        chunk = proc.stdout.read1(4096)
+        if not chunk:
+            break
+        buf += chunk
+        *lines, buf = re.split(rb"[\r\n]", buf)
+        for raw in lines:
+            line = raw.decode(errors="replace").strip()
+            if line:
+                tail = (tail + [line])[-6:]
+                on_line(line)
+    return proc.wait(), tail
+
+
+def snapshots_enabled():
+    """True if Shale Snapshots is set up with a backup disk."""
+    try:
+        with open("/etc/timeshift/timeshift.json", encoding="utf-8") as f:
+            return bool(json.load(f).get("backup_device_uuid"))
+    except (OSError, ValueError):
+        return False
+
+
+def clear_stale_lock():
+    lock = "/var/lib/pacman/db.lck"
+    if os.path.exists(lock):
+        running = subprocess.run(["pgrep", "-x", "pacman"], capture_output=True).returncode == 0
+        if running:
+            raise RuntimeError("Another update or installation is already running. "
+                               "Please try again in a few minutes.")
+        os.remove(lock)
+
+
+def failure(what, tail):
+    errors = [l.removeprefix("error: ") for l in tail if l.startswith("error:")]
+    return what + ("\n\n" + "\n".join(errors) if errors else "")
+
+
+def install(name):
+    emit("progress", "Checking for updates…", progress=0.02)
+    rc, tail = stream(["pacman", "-Sy", "--noconfirm"], lambda l: None)
+    if rc != 0:
+        raise RuntimeError(failure("Could not reach the software sources. Check your internet "
+                                   "connection and try again.", tail))
+
+    if snapshots_enabled() and subprocess.run(["pacman", "-Qqu"], capture_output=True).stdout.strip():
+        # Updates come along with the install, so take a restore point like Software Update.
+        emit("progress", "Creating a restore point…", progress=0.05)
+        stream(["timeshift", "--create", "--scripted", "--tags", "D",
+                "--comments", f"Before installing {name}"], lambda l: None)
+
+    def on_line(line):
+        m = re.match(r"^Packages \((\d+)\)", line)
+        if m:
+            emit("progress", "Downloading…", progress=0.10)
+            return
+        m = re.search(r"\(\s*(\d+)/(\d+)\) (upgrading|installing|reinstalling) (\S+)", line)
+        if m:
+            done, total = int(m.group(1)), int(m.group(2))
+            emit("progress", f"Installing {m.group(4).rstrip('.')}…",
+                 progress=0.45 + 0.50 * done / total)
+            return
+        if "downloading" in line or line.endswith(".pkg.tar.zst"):
+            emit("progress", "Downloading…")
+
+    rc, tail = stream(["pacman", "-Su", "--needed", "--noconfirm", name], on_line)
+    if rc != 0:
+        raise RuntimeError(failure(f"{name} could not be installed.", tail))
+
+
+def remove(name):
+    emit("progress", "Removing…", progress=0.10)
+
+    def on_line(line):
+        m = re.search(r"\(\s*(\d+)/(\d+)\) removing (\S+)", line)
+        if m:
+            done, total = int(m.group(1)), int(m.group(2))
+            emit("progress", f"Removing {m.group(3).rstrip('.')}…", progress=0.10 + 0.85 * done / total)
+
+    # -s: also remove dependencies nothing else needs, like apt's autoremove in Mint.
+    rc, tail = stream(["pacman", "-Rs", "--noconfirm", name], on_line)
+    if rc != 0:
+        raise RuntimeError(failure(f"{name} could not be removed.", tail))
+
+
+def main():
+    if os.geteuid() != 0:
+        emit("error", "The software helper must run as root.")
+        sys.exit(1)
+    if len(sys.argv) != 3 or sys.argv[1] not in ("install", "remove") or not NAME_RE.match(sys.argv[2]):
+        emit("error", "Usage: pacman-helper install|remove PACKAGE")
+        sys.exit(2)
+    try:
+        clear_stale_lock()
+        (install if sys.argv[1] == "install" else remove)(sys.argv[2])
+        emit("progress", "Done", progress=1.0)
+        emit("done")
+    except Exception as e:  # noqa: BLE001 - shown to the user
+        emit("error", str(e))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

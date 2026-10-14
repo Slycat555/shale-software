@@ -7,11 +7,11 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import GLib, GObject, Gio, Gtk
 
-from . import cache, _flatpak, _apt, dialogs
+from . import cache, _flatpak, _pacman, dialogs
 from .misc import print_timing, check_ml, debug, warn
 
 PKG_TYPE_ALL = None
-PKG_TYPE_APT = "a"
+PKG_TYPE_PACMAN = "p"
 PKG_TYPE_FLATPAK = "f"
 
 Gtk.IconTheme.get_default().append_search_path("/usr/share/linuxmint/icons")
@@ -91,7 +91,7 @@ class InstallerTask:
         self.client_finished_cb = client_installer_finished_cb
 
         # These are internally used - called as the 'real' error and finished callback,
-        # to do some cleanup like removing the task and reloading the apt cache before
+        # to do some cleanup like removing the task and reloading the pacman database before
         # finally calling task.client_finished_cb
         self.error_cleanup_cb = installer_error_cleanup_cb
         self.finished_cleanup_cb = installer_cleanup_cb
@@ -131,7 +131,7 @@ class InstallerTask:
         if pkginfo:
             self.name = pkginfo.name
 
-            if pkginfo.pkg_hash.startswith("a"):
+            if pkginfo.pkg_hash.startswith("p"):
                 self.arch = ""
                 self.branch = ""
                 self.remote = ""
@@ -392,8 +392,8 @@ class Installer(GObject.Object):
         task.set_version(self)
         task.as_pkg = self.get_appstream_pkg_for_pkginfo(pkginfo)
 
-        if pkginfo.pkg_hash.startswith("a"):
-            _apt.select_packages(task)
+        if pkginfo.pkg_hash.startswith("p"):
+            _pacman.select_packages(task)
         else:
             _flatpak.select_packages(task)
 
@@ -430,7 +430,7 @@ class Installer(GObject.Object):
     def find_pkginfo(self, name, pkg_type=PKG_TYPE_ALL, remote=None):
         """
         Attempts to find and return a PkgInfo object, given a package name.  If
-        pkg_type is None, looks in first apt, then flatpaks.
+        pkg_type is None, looks in first pacman, then flatpaks.
         """
         return self.cache.find_pkginfo(name, pkg_type, remote)
 
@@ -477,11 +477,11 @@ class Installer(GObject.Object):
     def pkginfo_is_installed(self, pkginfo):
         """
         Returns whether or not a given package is currently installed.  This uses
-        the AptCache or the FlatpakInstallation to check.
+        the pacman database or the FlatpakInstallation to check.
         """
         if self.inited:
-            if pkginfo.pkg_hash.startswith("a"):
-                return _apt.pkginfo_is_installed(pkginfo)
+            if pkginfo.pkg_hash.startswith("p"):
+                return _pacman.pkginfo_is_installed(pkginfo)
             elif self.have_flatpak and pkginfo.pkg_hash.startswith("f"):
                 return _flatpak.pkginfo_is_installed(pkginfo)
 
@@ -506,8 +506,8 @@ class Installer(GObject.Object):
         if self.have_flatpak:
             _flatpak.initialize_appstream(cb=self.on_appstream_loaded)
 
-        # Open the apt cache while we're in a thread.
-        _apt.get_apt_cache()
+        # Read the pacman database while we're in a thread.
+        _pacman.get_pacman_db()
 
     def on_appstream_loaded(self):
         self.generate_uncached_pkginfos()
@@ -521,8 +521,8 @@ class Installer(GObject.Object):
 
         backend_component = None
 
-        if pkginfo.pkg_hash.startswith("a"):
-            backend_component = _apt.search_for_pkginfo_apt_pkg(pkginfo)
+        if pkginfo.pkg_hash.startswith("p"):
+            backend_component = _pacman.search_for_pkginfo_pacman_pkg(pkginfo)
         else:
             backend_component = _flatpak.search_for_pkginfo_appstream_package(pkginfo)
 
@@ -536,7 +536,7 @@ class Installer(GObject.Object):
         Return the launchables associated with the AsApp for this pkginfo.
         """
 
-        if pkginfo.pkg_hash.startswith("a"):
+        if pkginfo.pkg_hash.startswith("p"):
             debug("launch_flatpak: pkginfo is not a flatpak")
 
         as_pkg = self.get_appstream_pkg_for_pkginfo(pkginfo)
@@ -558,7 +558,7 @@ class Installer(GObject.Object):
         """
         Returns an array of app ids of names of available addons
         """
-        if pkginfo.pkg_hash.startswith("a"):
+        if pkginfo.pkg_hash.startswith("p"):
             return None
 
         addons = _flatpak._get_addons_for_pkginfo(pkginfo)
@@ -573,9 +573,9 @@ class Installer(GObject.Object):
         Returns the description of the package. If for_search is True,
         html conversion is skipped and the raw description used.
         """
-        if for_search and pkginfo.pkg_hash.startswith("a"):
+        if for_search and pkginfo.pkg_hash.startswith("p"):
             try:
-                return _apt._apt_cache[pkginfo.name].candidate.description
+                return _pacman.get_pacman_db()[pkginfo.name].desc
             except Exception:
                 pass
 
@@ -610,8 +610,8 @@ class Installer(GObject.Object):
         """
         Returns the currently deployed version of a flatpak.
         """
-        if pkginfo.pkg_hash.startswith("a"):
-            # apt packages we don't really need to make a distinction.
+        if pkginfo.pkg_hash.startswith("p"):
+            # pacman packages: the version shown is already the installed one.
             return self.get_version(pkginfo)
         else:
             # flatpak packages, the appstream as_pkg shows the latest version provided in the xml,
@@ -631,8 +631,8 @@ class Installer(GObject.Object):
     def get_help_url(self, pkginfo):
         """
         Returns the help url for a package.  If there is
-        no url for the package, returns an empty string. Apt always returns
-        an empty string.
+        no url for the package, returns an empty string. pacman packages without
+        AppStream data always return an empty string.
         """
         as_pkg = self.get_appstream_pkg_for_pkginfo(pkginfo)
 
@@ -722,16 +722,16 @@ class Installer(GObject.Object):
         self._post_task_update(task)
 
     def _post_task_update(self, task):
-        if task.pkginfo and task.pkginfo.pkg_hash.startswith("a"):
-            thread = threading.Thread(target=self._apt_post_task_update_thread, args=(task,))
+        if task.pkginfo and task.pkginfo.pkg_hash.startswith("p"):
+            thread = threading.Thread(target=self._pacman_post_task_update_thread, args=(task,))
             thread.start()
         else:
             self._run_client_callback(task)
 
-    def _apt_post_task_update_thread(self, task):
-        _apt.sync_cache_installed_states()
+    def _pacman_post_task_update_thread(self, task):
+        _pacman.sync_cache_installed_states()
 
-        # This needs to be called after reloading the apt cache, otherwise our installed
+        # This needs to be called after reloading the pacman database, otherwise our installed
         # apps don't update correctly
         self._run_client_callback(task)
 

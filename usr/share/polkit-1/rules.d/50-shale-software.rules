@@ -1,0 +1,8 @@
+// Administrators sitting at the computer can install and remove software without a
+// password, like Software Update. Packages only come from the official repositories.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.shale.software" && subject.local && subject.active &&
+        subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+});

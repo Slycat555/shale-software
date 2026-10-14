@@ -8,21 +8,44 @@ LOCALE_DIR = "/usr/share/linuxmint/locale"
 t = gettext.translation(APP, LOCALE_DIR, fallback=True)
 _ = t.gettext
 
-from aptkit.gtk3widgets import AptConfirmDialog
+######################### Confirm dialog (Mint subclasses aptkit's; Shale has no apt)
 
-######################### Subclass Apt's dialog to keep consistency
-
-class ChangesConfirmDialog(AptConfirmDialog):
+class ChangesConfirmDialog(Gtk.Dialog):
 
     """Dialog to confirm the changes that would be required by a
     transaction.
     """
 
     def __init__(self, transaction, task=None, parent=None):
-        super(ChangesConfirmDialog, self).__init__(transaction, cache=None, parent=parent)
+        super(ChangesConfirmDialog, self).__init__(transient_for=parent, modal=parent is not None)
         self.parent_window = parent
         self.set_size_request(500, 350)
         self.task = task
+
+        self.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        self.add_button(_("Continue"), Gtk.ResponseType.OK).get_style_context().add_class("suggested-action")
+        self.set_default_response(Gtk.ResponseType.OK)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, border_width=12)
+        self.label = Gtk.Label(xalign=0.0, wrap=True, max_width_chars=60)
+        box.pack_start(self.label, False, False, 0)
+
+        self.treestore = Gtk.TreeStore(str)
+        self.treeview = Gtk.TreeView(model=self.treestore, headers_visible=False)
+        renderer = Gtk.CellRendererText()
+        column = Gtk.TreeViewColumn("", renderer)
+        column.set_cell_data_func(renderer, self.render_package_desc)
+        self.treeview.append_column(column)
+        self.scrolled = Gtk.ScrolledWindow(shadow_type=Gtk.ShadowType.IN, vexpand=True)
+        self.scrolled.add(self.treeview)
+        box.pack_start(self.scrolled, True, True, 0)
+
+        self.get_content_area().pack_start(box, True, True, 0)
+
+    def run(self):
+        self._show_changes()
+        self.show_all()
+        return super(ChangesConfirmDialog, self).run()
 
     def _show_changes(self):
         """Show a message and the dependencies in the dialog."""
@@ -31,8 +54,8 @@ class ChangesConfirmDialog(AptConfirmDialog):
             self.set_skip_taskbar_hint(True)
             self.set_keep_above(True)
 
-        # Run parent method for apt
-        if not self.task or (self.task.pkginfo and self.task.pkginfo.pkg_hash.startswith("a")):
+        # Arch packages
+        if not self.task or (self.task.pkginfo and self.task.pkginfo.pkg_hash.startswith("p")):
             """Show a message and the dependencies in the dialog."""
             self.treestore.clear()
             for pkg_list, msg, min_packages in (
@@ -59,6 +82,8 @@ class ChangesConfirmDialog(AptConfirmDialog):
             # FIXME: Should we have different modes? Only show dependencies, only
             #       initial packages or both?
             msg = _("Please take a look at the list of changes below.")
+            if len(self.task.to_update) > 0:
+                msg += "\n" + _("Your system will be brought up to date at the same time.")
             if len(self.treestore) == 1:
                 filtered_store = self.treestore.filter_new(Gtk.TreePath.new_first())
                 self.treeview.expand_all()
