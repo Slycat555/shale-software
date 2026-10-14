@@ -825,6 +825,14 @@ class Application(Gtk.Application):
         self.builder = Gtk.Builder.new_from_resource("/org/shale/software/shale-software.glade")
 
         self.main_window = self.builder.get_object("main_window")
+        # Shale: KWin draws the title bar (the Shale decoration, with its window buttons),
+        # like Shale's own apps; Mint's header bar becomes a toolbar under it.
+        headerbar = self.main_window.get_titlebar()
+        self.main_window.set_titlebar(None)
+        headerbar.set_show_close_button(False)
+        main_box = self.builder.get_object("vbox4")
+        main_box.pack_start(headerbar, False, False, 0)
+        main_box.reorder_child(headerbar, 0)
         self.main_window.set_title(_("Software Manager"))
         GLib.set_application_name(_("Software Manager"))
         self.set_default_window_size()

@@ -1,6 +1,6 @@
 # Builds Shale Software from this checkout: makepkg -si
 pkgname=shale-software
-pkgver=8.4.1.r.
+pkgver=8.4.1
 pkgrel=1
 pkgdesc="Software Manager for Shale Linux: apps from Flathub and the Arch repositories (Linux Mint's mintinstall, for pacman)"
 arch=(any)

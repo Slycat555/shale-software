@@ -4,7 +4,7 @@ shale-linux's tools/make-app-icons.py makes Software Update's and Shale Snapshot
 
 Usage: make-icons.py [LOGO.svg]   (default: /usr/share/pixmaps/shale-logo.svg)
   usr/share/icons/hicolor/scalable/apps/shale-software.svg
-      a shopping bag cut out of the strata, faint strata around it
+      a solid shopping bag over faint strata
   usr/share/icons/hicolor/scalable/status/shale-logo-badge-symbolic.svg
       the logo in one colour (every other stripe), for the "System package" badge
 """
@@ -16,6 +16,7 @@ from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QPainterPath, QPolygonF
 
 BG = "#2b3440"
+SYMBOL = "#c3cfdc"  # the logo's lightest stripe
 CX = CY = 64
 R = 58
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -66,10 +67,9 @@ def bag():
 def software_icon(stripes):
     shape = bag()
     out = [f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="{BG}"/>']
-    # The strata, faint everywhere and full strength inside the bag (like Software Update).
+    # Faint strata behind a solid bag in the logo's lightest colour (like Software Update).
     out += [svg_path(p, fill, ' fill-opacity="0.22"') for fill, p in stripes]
-    out.append(svg_path(shape.intersected(circle(CX, CY, R)), "#1b222b"))
-    out += [svg_path(p.intersected(shape), fill) for fill, p in stripes]
+    out.append(svg_path(shape.intersected(circle(CX, CY, R)), SYMBOL))
     return out
 
 
