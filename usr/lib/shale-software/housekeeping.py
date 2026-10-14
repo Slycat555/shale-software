@@ -10,7 +10,7 @@ import threading
 import multiprocessing
 from pathlib import Path
 
-SCREENSHOT_DIR = os.path.join(GLib.get_user_cache_dir(), "mintinstall", "screenshots")
+SCREENSHOT_DIR = os.path.join(GLib.get_user_cache_dir(), "shale-software", "screenshots")
 
 MAX_AGE = 14 * (60 * 60 * 24) # days
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="com.linuxmint.install" path="/com/linuxmint/install/">
+  <schema id="org.shale.software" path="/org/shale/software/">
     <key type="b" name="search-in-summary">
       <default>true</default>
       <summary></summary>
@@ -20,11 +20,6 @@
       <default>true</default>
       <summary>Remembers the state of the 'search in category' button</summary>
     </key>
-    <key type="b" name="hamonikr-screenshots">
-      <default>false</default>
-      <summary>Whether to use hamonikr screenshots</summary>
-      <description></description>
-    </key>
     <key type="as" name="flatpak-remotes">
       <default>[]</default>
       <summary>Check this against the FlatpakInstallation to determine if we need to refresh the cache at startup.</summary>
@@ -33,7 +28,7 @@
     <key type="s" name="search-package-type-preference">
       <choices>
         <choice value="all"/>
-        <choice value="apt"/>
+        <choice value="system"/>
         <choice value="flatpak"/>
       </choices>
       <default>"all"</default>

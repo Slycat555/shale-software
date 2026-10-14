@@ -4,7 +4,7 @@ from gi.repository import GLib, Gtk, GObject, Gdk, XApp, Pango
 
 import gettext
 APP = 'mint-common'
-LOCALE_DIR = "/usr/share/linuxmint/locale"
+LOCALE_DIR = "/usr/share/locale"
 t = gettext.translation(APP, LOCALE_DIR, fallback=True)
 _ = t.gettext
 

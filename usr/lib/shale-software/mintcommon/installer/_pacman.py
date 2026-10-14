@@ -26,7 +26,7 @@ from .dialogs import ChangesConfirmDialog
 from .misc import warn, debug
 from . import appstream_pool
 
-HELPER = "/usr/lib/linuxmint/mintinstall/pacman-helper"
+HELPER = "/usr/lib/shale-software/pacman-helper"
 SWCATALOG = "/usr/share/swcatalog"
 REPOS = ("core", "extra", "multilib")
 
@@ -143,7 +143,7 @@ class _SwcatalogPool(appstream_pool.Pool):
         if not xml.query_exists(None):
             self.xmlb_silo = None
             return
-        cache_dir = os.path.join(GLib.get_user_cache_dir(), "mintinstall")
+        cache_dir = os.path.join(GLib.get_user_cache_dir(), "shale-software")
         os.makedirs(cache_dir, exist_ok=True)
         source = Xmlb.BuilderSource()
         try:

@@ -30,7 +30,6 @@ import xapp.os
 from mintcommon.installer import installer
 from mintcommon.installer import dialogs
 import prefs
-import reviews
 import housekeeping
 from misc import print_timing, networking_available
 import imaging
@@ -56,23 +55,25 @@ PACKAGE_TYPE_COMBO_SUMMARY = 2
 PACKAGE_TYPE_COMBO_ICON_NAME = 3
 PACKAGE_TYPE_COMBO_PKGINFO = 4
 
-# Don't let mintinstall run as root
+# Don't let the Software Manager run as root
 if os.getuid() == 0:
     print("The software manager should not be run as root. Please run it in user mode.")
     sys.exit(1)
 
 # i18n
-APP = 'mintinstall'
-LOCALE_DIR = "/usr/share/linuxmint/locale"
+APP = 'shale-software'
+LOCALE_DIR = "/usr/share/locale"
 locale.bindtextdomain(APP, LOCALE_DIR)
 gettext.bindtextdomain(APP, LOCALE_DIR)
 gettext.textdomain(APP)
 _ = gettext.gettext
 
 import setproctitle
-setproctitle.setproctitle("mintinstall")
+setproctitle.setproctitle("shale-software")
+# Wayland matches the window to org.shale.software.desktop by this name.
+GLib.set_prgname("org.shale.software")
 
-Gtk.IconTheme.get_default().append_search_path("/usr/share/linuxmint/mintinstall")
+Gtk.IconTheme.get_default().append_search_path("/usr/share/shale-software")
 
 # List of aliases
 ALIASES = {}
@@ -82,9 +83,6 @@ ALIASES['minecraft-launcher'] = "Minecraft"
 ALIASES['virtualbox-qt'] = "Virtualbox " # Added a space to force alias
 ALIASES['virtualbox'] = "Virtualbox (base)"
 ALIASES['sublime-text'] = "Sublime"
-ALIASES['mint-meta-codecs'] = _("Multimedia Codecs")
-ALIASES['mint-meta-codecs-kde'] = _("Multimedia Codecs for KDE")
-ALIASES['mint-meta-debian-codecs'] = _("Multimedia Codecs")
 ALIASES['firefox'] = "Firefox"
 ALIASES['vlc'] = "VLC"
 ALIASES['mpv'] = "Mpv"
@@ -97,7 +95,7 @@ ALIASES['google-earth-pro-stable'] = "Google Earth"
 ALIASES['whatsapp-desktop'] = "WhatsApp"
 ALIASES['wine-installer'] = "Wine"
 
-libdir = os.path.join("/usr/lib/linuxmint/mintinstall")
+libdir = os.path.join("/usr/lib/shale-software")
 
 with open(os.path.join(libdir, "apt_flatpak_match_data.info")) as f:
     match_data = json.load(f)
@@ -105,7 +103,7 @@ with open(os.path.join(libdir, "apt_flatpak_match_data.info")) as f:
 FLATPAK_EQUIVS = match_data["apt_flatpak_matches"]
 DEB_EQUIVS = dict((v, k) for k,v in FLATPAK_EQUIVS.items())
 
-pkg_tile_ui = "/usr/share/linuxmint/mintinstall/mintinstall.gresource"
+pkg_tile_ui = "/usr/share/shale-software/shale-software.gresource"
 UI_RESOURCES = Gio.Resource.load(pkg_tile_ui)
 UI_RESOURCES._register()
 
@@ -324,7 +322,7 @@ class BannerTile(Gtk.FlowBoxChild):
         self.background = background
         self.color = color
 
-        self.image_uri = (f"/usr/share/linuxmint/mintinstall/featured/{name}.svg")
+        self.image_uri = (f"/usr/share/shale-software/featured/{name}.svg")
 
         css = """
 #BannerTile {
@@ -419,7 +417,7 @@ class PackageTile(Gtk.FlowBoxChild):
                 self.pkg_category = pkginfo.categories[1]
 
 
-        self.builder = Gtk.Builder.new_from_resource("/com/linuxmint/mintinstall/package-tile.glade")
+        self.builder = Gtk.Builder.new_from_resource("/org/shale/software/package-tile.glade")
 
         self.overlay = self.builder.get_object("vertical_package_tile")
         self.button.add(self.overlay)
@@ -624,13 +622,13 @@ class Application(Gtk.Application):
     PAGE_PREFS = "prefs"
 
     def __init__(self):
-        super(Application, self).__init__(application_id='com.linuxmint.mintinstall',
+        super(Application, self).__init__(application_id='org.shale.software',
                                           flags=Gio.ApplicationFlags.HANDLES_OPEN | Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
 
         self.gui_ready = False
         self.start_time = time.time()
 
-        self.settings = Gio.Settings(schema_id="com.linuxmint.install")
+        self.settings = Gio.Settings(schema_id="org.shale.software")
         self.arch = platform.machine()
 
         print("MintInstall: Detected system architecture: '%s'" % self.arch)
@@ -823,14 +821,14 @@ class Application(Gtk.Application):
             return
 
         # Build the GUI
-        self.builder = Gtk.Builder.new_from_resource("/com/linuxmint/mintinstall/mintinstall.glade")
+        self.builder = Gtk.Builder.new_from_resource("/org/shale/software/shale-software.glade")
 
         self.main_window = self.builder.get_object("main_window")
         self.main_window.set_title(_("Software Manager"))
         GLib.set_application_name(_("Software Manager"))
         self.set_default_window_size()
 
-        self.main_window.set_icon_name("mintinstall")
+        self.main_window.set_icon_name("shale-software")
         self.main_window.connect("delete_event", self.close_application)
         self.main_window.connect("key-press-event", self.on_keypress)
         self.main_window.connect("button-press-event", self.on_buttonpress)
@@ -882,10 +880,6 @@ class Application(Gtk.Application):
         self.refresh_cache_menuitem.set_sensitive(False)
         submenu.append(self.refresh_cache_menuitem)
 
-        software_sources_menuitem = Gtk.MenuItem(label=_("Software sources"))
-        software_sources_menuitem.connect("activate", self.open_software_sources)
-        software_sources_menuitem.show()
-        submenu.append(software_sources_menuitem)
 
         self.prefs_menuitem = Gtk.MenuItem(label=_("Preferences"))
         self.prefs_menuitem.connect("activate", self.on_prefs_clicked)
@@ -1068,8 +1062,6 @@ class Application(Gtk.Application):
 
             self.apply_aliases()
 
-            self.review_cache = reviews.ReviewCache()
-            self.review_cache.connect("reviews-updated", self.load_landing_apps)
             self.load_landing_apps()
             self.load_categories_on_landing()
 
@@ -1214,7 +1206,7 @@ class Application(Gtk.Application):
         self.current_dot_index = 0
 
         # Load featured applications
-        json_array = json.load(open("/usr/share/linuxmint/mintinstall/featured/featured.json", "r"))
+        json_array = json.load(open("/usr/share/shale-software/featured/featured.json", "r"))
         random.shuffle(json_array)
 
         selected_apps = set()
@@ -1419,7 +1411,7 @@ class Application(Gtk.Application):
             child.destroy()
 
         apps = []
-        featured_list = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/picks.list")
+        featured_list = self.file_to_array("/usr/share/shale-software/categories/picks.list")
         for name in featured_list:
             if name.startswith("flatpak:"):
                 name = name.replace("flatpak:", "")
@@ -1496,15 +1488,6 @@ class Application(Gtk.Application):
         self.load_banner()
         self.load_featured()
         self.load_top_rated()
-
-    def open_software_sources(self,_):
-        # Opens Mint's Software Sources and refreshes the cache afterwards
-        def on_process_exited(proc, result):
-            proc.wait_finish(result)
-            self.refresh_cache()
-        p = Gio.Subprocess.new(["mintsources"], 0)
-        # Add a callback when we exit mintsources
-        p.wait_async(None, on_process_exited)
 
     def should_show_pkginfo(self, pkginfo):
         if pkginfo.pkg_hash.startswith("pacman"):
@@ -1889,18 +1872,17 @@ class Application(Gtk.Application):
         dlg = Gtk.AboutDialog()
         dlg.set_transient_for(self.main_window)
         dlg.set_title(_("About"))
-        dlg.set_program_name("mintinstall")
-        dlg.set_comments(_("Software Manager"))
-        try:
-            with open('/usr/share/common-licenses/GPL', 'r') as h:
-                gpl = h.read()
-            dlg.set_license(gpl)
-        except Exception as e:
-            print(e)
+        dlg.set_program_name(_("Software Manager"))
+        dlg.set_comments(_("Install apps from Flathub and the Arch Linux repositories.") + "\n" +
+                         _("Based on Linux Mint's Software Manager."))
+        dlg.set_license_type(Gtk.License.GPL_2_0)
+        dlg.set_copyright("Copyright © Linux Mint and the Shale Linux contributors")
+        dlg.set_website("https://github.com/slycat555/shale-linux")
+        dlg.set_website_label("Shale Linux")
 
-        dlg.set_version("__DEB_VERSION__")
-        dlg.set_icon_name("mintinstall")
-        dlg.set_logo_icon_name("mintinstall")
+        dlg.set_version("__VERSION__")
+        dlg.set_icon_name("shale-software")
+        dlg.set_logo_icon_name("shale-software")
 
         def close(w, res):
             if res == Gtk.ResponseType.CANCEL or res == Gtk.ResponseType.DELETE_EVENT:
@@ -1909,12 +1891,6 @@ class Application(Gtk.Application):
         dlg.show()
 
     def export_listing(self, flatpak_only=False):
-        if not flatpak_only:
-            for filename in os.listdir("/var/lib/apt/lists/"):
-                if "i18n" in filename and not filename.endswith("-en"):
-                    print("Your APT cache is localized. Please remove all translations first.")
-                    print("sudo rm -rf /var/lib/apt/lists/*Translation%s" % filename[-3:])
-                    return 1
         if (os.getenv('LANGUAGE') != "C"):
             print("Please prefix this command with LANGUAGE=C, to prevent content from being translated in the host's locale.")
             return 1
@@ -2046,23 +2022,23 @@ class Application(Gtk.Application):
         subcat = Category(_("Web"), category, self.categories, "mintinstall-web-symbolic")
         self.sections["web"] = subcat
         self.sections["net"] = subcat
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/internet-web.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/internet-web.list")
 
         subcat = Category(_("Email"), category, self.categories, "mintinstall-email-symbolic")
         self.sections["mail"] = subcat
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/internet-email.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/internet-email.list")
 
         subcat = Category(_("Chat"), category, self.categories, "mintinstall-chat-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/internet-chat.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/internet-chat.list")
 
         subcat = Category(_("File sharing"), category, self.categories, "mintinstall-share-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/internet-filesharing.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/internet-filesharing.list")
 
         self.root_categories[category.name] = category
 
         # SOUND AND VIDEO
         category = Category(_("Sound and video"), None, self.categories, "mintinstall-music-symbolic")
-        category.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/sound-video.list")
+        category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/sound-video.list")
         subcat = Category(_("Sound"), category, self.categories, "mintinstall-music-symbolic")
         self.sections["sound"] = subcat
         subcat = Category(_("Video"), category, self.categories, "mintinstall-video-symbolic")
@@ -2072,20 +2048,20 @@ class Application(Gtk.Application):
         # GRAPHICS
         category = Category(_("Graphics"), None, self.categories, "mintinstall-drawing-symbolic")
         self.sections["graphics"] = category
-        category.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/graphics.list")
+        category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics.list")
 
         subcat = Category(_("3D"), category, self.categories, "mintinstall-3d-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/graphics-3d.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-3d.list")
         subcat = Category(_("Drawing"), category, self.categories, "mintinstall-drawing-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/graphics-drawing.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-drawing.list")
         subcat = Category(_("Photography"), category, self.categories, "mintinstall-photo-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/graphics-photography.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-photography.list")
         subcat = Category(_("Publishing"), category, self.categories, "mintinstall-publishing-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/graphics-publishing.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-publishing.list")
         subcat = Category(_("Scanning"), category, self.categories, "mintinstall-scanning-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/graphics-scanning.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-scanning.list")
         subcat = Category(_("Viewers"), category, self.categories, "mintinstall-viewers-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/graphics-viewers.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/graphics-viewers.list")
         self.root_categories[category.name] = category
 
         # OFFICE
@@ -2097,20 +2073,20 @@ class Application(Gtk.Application):
         # GAMES
         category = Category(_("Games"), None, self.categories, "mintinstall-games-symbolic")
         self.sections["games"] = category
-        category.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/games.list")
+        category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games.list")
 
         subcat = Category(_("Board games"), category, self.categories, "mintinstall-board-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/games-board.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-board.list")
         subcat = Category(_("First-person"), category, self.categories, "mintinstall-fps-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/games-fps.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-fps.list")
         subcat = Category(_("Real-time strategy"), category, self.categories, "mintinstall-rts-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/games-rts.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-rts.list")
         subcat = Category(_("Turn-based strategy"), category, self.categories, "mintinstall-tbs-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/games-tbs.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-tbs.list")
         subcat = Category(_("Emulators"), category, self.categories, "mintinstall-emulator-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/games-emulators.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-emulators.list")
         subcat = Category(_("Simulation and racing"), category, self.categories, "mintinstall-sim-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/games-simulations.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/games-simulations.list")
         self.root_categories[category.name] = category
 
         # ACCESSORIES
@@ -2123,13 +2099,13 @@ class Application(Gtk.Application):
         category = Category(_("System tools"), None, self.categories, "mintinstall-system-symbolic")
         self.sections["system"] = category
         self.sections["admin"] = category
-        category.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/system-tools.list")
+        category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/system-tools.list")
         self.root_categories[category.name] = category
 
         # FONTS
         category = Category(_("Fonts"), None, self.categories, "mintinstall-fonts-symbolic")
         self.sections["fonts"] = category
-        category.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/fonts.list")
+        category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/fonts.list")
         self.root_categories[category.name] = category
 
         # EDUCATION
@@ -2142,7 +2118,7 @@ class Application(Gtk.Application):
         self.sections["education"] = subcat
         subcat = Category(_("Electronics"), category, self.categories, "mintinstall-electronic-symbolic")
         self.sections["electronics"] = subcat
-        category.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/education.list")
+        category.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/education.list")
         self.root_categories[category.name] = category
 
         # PROGRAMMING
@@ -2155,7 +2131,7 @@ class Application(Gtk.Application):
         subcat = Category(_("Python"), category, self.categories, "mintinstall-python-symbolic")
         self.sections["python"] = subcat
         subcat = Category(_("Essentials"), category, self.categories, "xsi-favorites-app-symbolic")
-        subcat.matchingPackages = self.file_to_array("/usr/share/linuxmint/mintinstall/categories/development-essentials.list")
+        subcat.matchingPackages = self.file_to_array("/usr/share/shale-software/categories/development-essentials.list")
         self.root_categories[category.name] = category
 
         # ALL
@@ -2514,7 +2490,7 @@ class Application(Gtk.Application):
 
             if is_match:
                 searched_packages.append(pkginfo)
-                if package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_APT and not flatpak:
+                if package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_SYSTEM and not flatpak:
                     hidden_packages.add(FLATPAK_EQUIVS.get(pkginfo.name))
                 elif package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_FLATPAK and flatpak:
                     hidden_packages.add(DEB_EQUIVS.get(pkginfo.name))
@@ -2525,7 +2501,7 @@ class Application(Gtk.Application):
 
             self.search_idle_timer = 0
 
-            if package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_APT:
+            if package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_SYSTEM:
                 results = [p for p in searched_packages if not (p.pkg_hash.startswith("f") and p.name in hidden_packages)]
             elif package_type_preference == prefs.PACKAGE_TYPE_PREFERENCE_FLATPAK:
                 results = [p for p in searched_packages if not (p.pkg_hash.startswith("p") and p.name in hidden_packages)]
@@ -2759,7 +2735,7 @@ class Application(Gtk.Application):
                 row_pkginfo = match
 
         if row_pkginfo:
-            row = [i, _("System Package"), _("Your system's package manager"), "linuxmint-logo-badge-symbolic", row_pkginfo]
+            row = [i, _("System Package"), _("Your system's package manager"), "shale-logo-badge-symbolic", row_pkginfo]
             iter = self.package_type_store.append(row)
             if pkginfo == row_pkginfo:
                 to_use_iter = iter
@@ -2845,18 +2821,6 @@ class Application(Gtk.Application):
 
         description = self.installer.get_description(pkginfo)
 
-        if self.settings.get_boolean(prefs.HAMONIKR_SCREENSHOTS):
-            try:
-                from bs4 import BeautifulSoup
-                hamonikrpkgname = pkginfo.name.replace("-","_")
-                page = BeautifulSoup(urllib.request.urlopen("https://hamonikr.org/%s" % hamonikrpkgname, timeout=5), "lxml")
-                texts = page.find("div","xe_content")
-                text = texts.get_text()
-                if text is not None:
-                    description = text
-            except Exception as e:
-                pass
-
         app_description = self.builder.get_object("application_description")
 
         if description not in (None, ''):
@@ -2865,89 +2829,9 @@ class Application(Gtk.Application):
         else:
             app_description.hide()
 
-        box_reviews = self.builder.get_object("box_reviews")
-
-        for child in box_reviews.get_children():
-            box_reviews.remove(child)
-
-        if not is_flatpak or pkginfo.verified:
-            review_info = self.review_cache[pkginfo.name]
-
-            label_num_reviews = self.builder.get_object("application_num_reviews")
-
-            # TRANSLATORS: showing specific number of reviews in the list view and the header of the package details.
-            review_text = gettext.ngettext("%d Review", "%d Reviews", review_info.num_reviews) % review_info.num_reviews
-            label_num_reviews.set_label(review_text)
-
-            self.builder.get_object("application_avg_rating").set_label(str(review_info.avg_rating))
-
-            box_stars = self.builder.get_object("box_stars")
-            for child in box_stars.get_children():
-                box_stars.remove(child)
-            rating = review_info.avg_rating
-            remaining_stars = 5
-            while rating >= 1.0:
-                box_stars.pack_start(Gtk.Image(icon_name="xsi-starred-symbolic", pixel_size=16), False, False, 0)
-                rating -= 1
-                remaining_stars -= 1
-            if rating > 0.0:
-                box_stars.pack_start(Gtk.Image(icon_name="xsi-semi-starred-symbolic", pixel_size=16), False, False, 0)
-                remaining_stars -= 1
-            for i in range(remaining_stars):
-                box_stars.pack_start(Gtk.Image(icon_name="xsi-non-starred-symbolic", pixel_size=16), False, False, 0)
-
-            box_stars.show_all()
-
-            for i in range(0, 5):
-                self.star_bars[i].set_fraction(0.0)
-                self.builder.get_object("stars_count_%d" % (i + 1)).set_label("")
-
-            reviews = review_info.reviews
-            reviews.sort(key=lambda x: x.date, reverse=True)
-
-            stars = [0, 0, 0, 0, 0]
-            n_reviews = len(reviews)
-
-            if n_reviews > 0:
-                # TRANSLATORS: reviews heading in package details view
-                # label_reviews.set_text(_("Reviews"))
-                i = 0
-                for review in reviews:
-                    if i < 10:
-                        comment = review.comment.strip()
-                        comment = comment.replace("'", "\'")
-                        comment = comment.replace('"', '\"')
-                        comment = self.capitalize(comment)
-                        review_date = datetime.fromtimestamp(review.date).strftime("%Y.%m.%d")
-                        tile = ReviewTile(review.username, review_date, comment, review.rating)
-                        box_reviews.add(tile)
-                        i = i +1
-
-                    stars[review.rating - 1] += 1
-
-                for i in range(0, 5):
-                    widget_idx = i + 1
-                    label = self.builder.get_object("stars_count_%s" % widget_idx)
-
-                    label.set_label(str(stars[i]))
-                    self.star_bars[i].set_fraction(stars[i] / n_reviews)
-
-            add_your_own = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            add_your_own.set_margin_start(12)
-            add_your_own.set_margin_end(12)
-            add_your_own.set_margin_top(12)
-            add_your_own.set_margin_bottom(12)
-
-            community_link = "https://community.linuxmint.com/software/view/%s" % pkginfo.name
-            label = Gtk.Label(xalign=0.0, use_markup=True, label=_("Click <a href='%s'>here</a> to add your own review.") % community_link)
-            add_your_own.pack_start(label, True, True, 0)
-            box_reviews.add(add_your_own)
-            box_reviews.show_all()
-            self.builder.get_object("reviews_page").show()
-            self.builder.get_object("details_review_box").show()
-        else:
-            self.builder.get_object("reviews_page").hide()
-            self.builder.get_object("details_review_box").hide()
+        # Shale has no reviews (Mint's come from community.linuxmint.com).
+        self.builder.get_object("reviews_page").hide()
+        self.builder.get_object("details_review_box").hide()
 
         # Screenshots
         self.destroy_screenshot_window()
@@ -3035,7 +2919,7 @@ class Application(Gtk.Application):
                 if pkginfo.pkg_hash.startswith("f"):
                     action_button_icon = "mintinstall-package-flatpak-symbolic"
                 else:
-                    action_button_icon = "linuxmint-logo-badge-symbolic"
+                    action_button_icon = "shale-logo-badge-symbolic"
 
                 style_context.remove_class("destructive-action")
                 style_context.add_class("suggested-action")
@@ -3061,9 +2945,9 @@ class Application(Gtk.Application):
                 style_context.remove_class("destructive-action")
                 style_context.remove_class("suggested-action")
                 if task.type == "install":
-                    action_button_description = _("Please use apt-get to install this package.")
+                    action_button_description = _("This package can't be installed right now. Try again after updating your computer.")
                 else:
-                    action_button_description = _("Use apt-get to remove this package.")
+                    action_button_description = _("Other software needs this package, so it can't be removed on its own.")
 
                 self.action_button.set_sensitive(False)
             elif task.info_ready_status == task.STATUS_UNKNOWN:

@@ -14,7 +14,6 @@ PKG_TYPE_ALL = None
 PKG_TYPE_PACMAN = "p"
 PKG_TYPE_FLATPAK = "f"
 
-Gtk.IconTheme.get_default().append_search_path("/usr/share/linuxmint/icons")
 
 class InstallerTask:
     # task types
@@ -207,7 +206,7 @@ class Installer(GObject.Object):
         self.pkg_type = pkg_type
 
         if temp:
-            f = tempfile.NamedTemporaryFile(prefix="mint-common-installer-tmp")
+            f = tempfile.NamedTemporaryFile(prefix="shale-software-installer-tmp")
             self.cache_path = f.name
         else:
             self.cache_path = None
@@ -230,7 +229,7 @@ class Installer(GObject.Object):
 
             return True
         except:
-            warn("No flatpak support, install flatpak and gir1.2-flatpak-1.0 and restart mintinstall to enable it.")
+            warn("No flatpak support, install flatpak and restart the Software Manager to enable it.")
 
         return False
 
@@ -245,7 +244,7 @@ class Installer(GObject.Object):
             debug("Not syncing for flatpaks only, as there is currently no support")
             return True
 
-        self.settings = Gio.Settings(schema_id="com.linuxmint.install")
+        self.settings = Gio.Settings(schema_id="org.shale.software")
 
         if self._fp_remotes_have_changed():
             self.remotes_changed = True

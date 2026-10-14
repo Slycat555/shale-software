@@ -24,7 +24,7 @@ def main():
             suffix = ".flatpakref"
 
         try:
-            fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="mintinstall-", dir=XApp.get_tmp_dir())
+            fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="shale-software-", dir=XApp.get_tmp_dir())
             os.close(fd)
 
             src = Gio.File.new_for_uri(url)
@@ -33,11 +33,11 @@ def main():
 
             args = [tmp_path]
         except GLib.Error as e:
-            print("mintinstall-fp-handler: Failed to download %s: %s" % (url, e.message), file=sys.stderr)
+            print("shale-software-fp-handler: Failed to download %s: %s" % (url, e.message), file=sys.stderr)
             sys.exit(1)
 
     try:
-        subprocess.call(["/usr/lib/linuxmint/mintinstall/mintinstall.py", "install"] + args)
+        subprocess.call(["/usr/lib/shale-software/shale-software.py", "install"] + args)
     finally:
         if tmp_path:
             try:

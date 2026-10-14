@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.40.0 -->
-<interface domain="mintinstall">
+<interface domain="shale-software">
   <requires lib="gtk+" version="3.22"/>
   <object class="GtkSizeGroup"/>
   <object class="GtkSizeGroup"/>
@@ -199,7 +199,7 @@
               <object class="GtkImage">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="icon-name">linuxmint-logo-badge-symbolic</property>
+                <property name="icon-name">shale-logo-badge-symbolic</property>
                 <property name="icon_size">3</property>
               </object>
               <packing>

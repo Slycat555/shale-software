@@ -1,0 +1,5 @@
+#!/usr/bin/python3
+import os
+import sys
+
+os.execv("/usr/lib/shale-software/shale-software.py", ["shale-software"] + sys.argv[1:])

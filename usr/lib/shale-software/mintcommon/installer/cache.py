@@ -13,8 +13,8 @@ from .pkgInfo import FlatpakPkgInfo, PacmanPkgInfo
 from .misc import print_timing, debug, warn
 from typing import Optional
 
-SYS_CACHE_PATH = "/var/cache/mintinstall/pkginfo.json"
-USER_CACHE_PATH = os.path.join(GLib.get_user_cache_dir(), "mintinstall", "pkginfo.json")
+SYS_CACHE_PATH = "/var/cache/shale-software/pkginfo.json"
+USER_CACHE_PATH = os.path.join(GLib.get_user_cache_dir(), "shale-software", "pkginfo.json")
 
 MAX_AGE = 7 * (60 * 60 * 24) # days
 

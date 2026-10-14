@@ -8,19 +8,18 @@ from xapp.SettingsWidgets import SettingsPage, Text
 from xapp.GSettingsWidgets import GSettingsSwitch, GSettingsComboBox
 
 # GSettings
-SCHEMA_ID = "com.linuxmint.install"
+SCHEMA_ID = "org.shale.software"
 
 SEARCH_IN_SUMMARY = "search-in-summary"
 SEARCH_IN_DESCRIPTION = "search-in-description"
 INSTALLED_APPS = "installed-apps"
 SEARCH_IN_CATEGORY = "search-in-category"
-HAMONIKR_SCREENSHOTS = "hamonikr-screenshots"
 PACKAGE_TYPE_PREFERENCE = "search-package-type-preference"
 ALLOW_UNVERIFIED_FLATPAKS = "allow-unverified-flatpaks"
 
 # Flatpak search option items
 PACKAGE_TYPE_PREFERENCE_ALL = "all"
-PACKAGE_TYPE_PREFERENCE_APT = "apt"
+PACKAGE_TYPE_PREFERENCE_SYSTEM = "system"
 PACKAGE_TYPE_PREFERENCE_FLATPAK = "flatpak"
 
 _ = gettext.gettext
@@ -54,7 +53,7 @@ class PrefsWidget(Gtk.Box):
         search_options = [
             [PACKAGE_TYPE_PREFERENCE_ALL, _("List all types")],
             (PACKAGE_TYPE_PREFERENCE_FLATPAK, _("Only list the Flatpak")),
-            (PACKAGE_TYPE_PREFERENCE_APT, _("Only list the system package")),
+            (PACKAGE_TYPE_PREFERENCE_SYSTEM, _("Only list the system package")),
         ]
 
         section = page.add_section()
