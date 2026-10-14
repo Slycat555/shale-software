@@ -1658,7 +1658,7 @@ class Application(Gtk.Application):
             self.add_screenshot(pkginfo, ss_path, n)
 
         if n == 0:
-            downloadScreenshots = imaging.ScreenshotDownloader(self, pkginfo, self.main_window.get_scale_factor())
+            downloadScreenshots = imaging.ScreenshotDownloader(self, pkginfo, imaging.ui_scale(self.main_window))
 
     def add_screenshot(self, pkginfo, ss_path, n):
         if pkginfo != self.current_pkginfo:
@@ -1765,6 +1765,12 @@ class Application(Gtk.Application):
             multiple_images = len(self.installer.get_screenshots(self.current_pkginfo)) > 1 or \
                                   self.screenshot_stack.last > 1
             self.screenshot_window = ScreenshotWindow(self.main_window, multiple_images)
+            # A fixed size the images are centred in: resizing a window to each image
+            # moves it off-centre on Wayland, where KWin keeps its top-left corner.
+            area = Gdk.Display.get_default().get_monitor_at_window(self.main_window.get_window()).get_workarea()
+            self.screenshot_window.set_default_size(int(area.width * .8), int(area.height * .8))
+            self.screenshot_window.show_all()
+            self.screenshot_window.present()
             self.screenshot_window.connect("next-image", self.next_enlarged_screenshot_requested)
             self.screenshot_window.connect("destroy", self.enlarged_screenshot_window_destroyed)
 

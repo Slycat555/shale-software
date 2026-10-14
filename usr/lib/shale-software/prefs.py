@@ -45,7 +45,7 @@ class PrefsWidget(Gtk.Box):
         section = page.add_section(_("Flatpaks"))
 
 
-        widget = GSettingsSwitch(_("Show unverified Flatpaks (not recommended)"), SCHEMA_ID, ALLOW_UNVERIFIED_FLATPAKS)
+        widget = GSettingsSwitch(_("Show unverified Flatpaks"), SCHEMA_ID, ALLOW_UNVERIFIED_FLATPAKS)
         section.add_row(widget)
 
         section.add(warning_box)

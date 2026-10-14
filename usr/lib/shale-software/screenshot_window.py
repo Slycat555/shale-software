@@ -18,10 +18,12 @@ class ScreenshotWindow(Gtk.Window):
                             destroy_with_parent=True,
                             skip_taskbar_hint=True,
                             skip_pager_hint=True,
-                            type_hint=Gdk.WindowTypeHint.UTILITY,
+                            type_hint=Gdk.WindowTypeHint.DIALOG,
+                            modal=True,
                             name="ScreenshotWindow")
 
-        self.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
+        # A modal dialog of the main window, so KWin centres it over it.
+        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         self.screen = Gdk.Screen.get_default()
 
         self.visual = self.screen.get_rgba_visual()
@@ -51,6 +53,8 @@ class ScreenshotWindow(Gtk.Window):
         self.stack = Gtk.Stack(homogeneous=False,
                                hhomogeneous=False,
                                transition_duration=500,
+                               halign=Gtk.Align.CENTER,
+                               valign=Gtk.Align.CENTER,
                                no_show_all=True)
 
         self.overlay.add(self.stack)
@@ -69,10 +73,6 @@ class ScreenshotWindow(Gtk.Window):
 
         self.first_image_name = None
         self.last_image_name = None
-
-        if self.visual is not None:
-            self.show_all()
-            self.present()
 
     def window_realized(self, widget, data=None):
         self.window = self.get_window()
@@ -123,12 +123,7 @@ class ScreenshotWindow(Gtk.Window):
         self.set_busy(False)
         self.stack.set_visible_child_name(image_location)
 
-        image = self.stack.get_visible_child()
-        self.resize(image.width, image.height)
-
-        if self.visual is None:
-            self.show_all()
-            self.present()
+        # The window keeps its size (set by the app) and the image stays centred in it.
 
     def emit_next_image(self, direction):
         if self.emit("next-image", direction):

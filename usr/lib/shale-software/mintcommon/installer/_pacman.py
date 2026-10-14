@@ -142,7 +142,9 @@ class _SwcatalogPackage(appstream_pool.Package):
 
     def get_icon(self, size=64):
         # Arch keeps cached icons per repository, not next to the catalogue like Flathub.
+        # The largest one wins: scaled down it stays sharp on HiDPI screens.
         best = None
+        best_height = 0
         try:
             icons = self.xbnode.query("icon", 0)
         except GLib.Error:
@@ -155,10 +157,8 @@ class _SwcatalogPackage(appstream_pool.Package):
             elif kind == "cached":
                 height = int(icon.get_attr("height") or 64)
                 path = f"{SWCATALOG}/icons/archlinux-arch-{self.remote_name}/{height}x{height}/{text}"
-                if os.path.exists(path):
-                    if height >= size:
-                        return path
-                    best = path
+                if height > best_height and os.path.exists(path):
+                    best, best_height = path, height
         return best
 
 

@@ -28,6 +28,18 @@ MAX_THREADS = 2
 threadpool = ThreadPoolExecutor(max_workers=MAX_THREADS, thread_name_prefix="mintinstall-images")
 icon_surface_cache = {}
 
+def ui_scale(widget=None):
+    """The display's scale factor (2 on a 4K screen at 200%). A widget only knows it once
+    it's in a window, so fall back to the largest monitor scale; loading images at the
+    wrong scale is what made icons and screenshots blurry."""
+    scale = widget.get_scale_factor() if widget is not None else 1
+    if scale == 1:
+        display = Gdk.Display.get_default()
+        if display is not None:
+            scales = [display.get_monitor(i).get_scale_factor() for i in range(display.get_n_monitors())]
+            scale = max(scales or [1])
+    return scale
+
 def clear_cache():
     icon_surface_cache = {}
 
@@ -85,13 +97,16 @@ class AsyncImage(Gtk.Image):
         # This keeps the icon's space occupied until loaded.
         self.set_size_request(width, height)
 
+        # Load at the screen's real resolution, then hand GTK a surface at that scale.
+        self.scale = ui_scale(self)
+
         if width != -1:
-            self.width = width * self.get_scale_factor()
+            self.width = width * self.scale
         else:
             self.width = width
 
         if height != -1:
-            self.height = height * self.get_scale_factor()
+            self.height = height * self.scale
         else:
             self.height = height
 
@@ -178,7 +193,7 @@ class AsyncImage(Gtk.Image):
             pixbuf = GdkPixbuf.Pixbuf.new_from_stream_finish(result)
 
             if pixbuf:
-                scale = self.get_scale_factor()
+                scale = self.scale
                 self.width = pixbuf.get_width() / scale
                 self.height = pixbuf.get_height() / scale
                 surface = Gdk.cairo_surface_create_from_pixbuf(pixbuf,
@@ -223,7 +238,8 @@ class ScreenshotDownloader():
             # Add additional screenshots from appstream info.
             if len(self.application.installer.get_screenshots(self.pkginfo)) > 0:
                 for screenshot in self.pkginfo.screenshots:
-                    image = screenshot.get_image(624, 351, self.scale_factor)
+                    # Pick the image for the real pixel size (1248 wide at 200%).
+                    image = screenshot.get_image(624 * self.scale_factor, 351 * self.scale_factor)
                     source = screenshot.get_source_image()
 
                     url = self.prefix_media_base_url(image.url)

@@ -343,6 +343,9 @@ class Package():
         return launchables
 
     def get_icon(self, size=64):
+        # Prefer the 128px icon: it's scaled down sharply, while a 64px one goes blurry on
+        # HiDPI screens.
+        size = max(size, 128)
         icon_to_use = None
         remote_icon = None
         local_exists_icon = None

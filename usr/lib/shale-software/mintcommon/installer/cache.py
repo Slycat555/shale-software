@@ -18,7 +18,8 @@ USER_CACHE_PATH = os.path.join(GLib.get_user_cache_dir(), "shale-software", "pkg
 
 MAX_AGE = 7 * (60 * 60 * 24) # days
 
-CACHE_SCHEMA_VERSION = 3
+# 4: Shale - larger icons for HiDPI
+CACHE_SCHEMA_VERSION = 4
 
 class CacheLoadingError(Exception):
     """Thrown when there was an issue loading the pickled package set"""
