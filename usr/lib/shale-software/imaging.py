@@ -58,7 +58,12 @@ def get_icon(string, size):
     return icon
 
 def get_image_for_screenshot(string, width, height):
-    return AsyncImage(string, width, height)
+    # Screenshots with transparent parts (rounded corners, shadows) get the window's
+    # background behind them, so they don't show the page or the desktop through.
+    image = AsyncImage(None, width, height)
+    image.flatten = True
+    image.set_icon_string(string, width, height)
+    return image
 
 class AsyncImage(Gtk.Image):
     __gsignals__ = {
@@ -78,6 +83,7 @@ class AsyncImage(Gtk.Image):
         self.width = 1
         self.height = 1
         self.cached = cache
+        self.flatten = False
 
         self.connect("destroy", self.on_destroyed)
 
@@ -177,6 +183,20 @@ class AsyncImage(Gtk.Image):
         else:
             GLib.idle_add(self.emit_image_failed)
 
+    def _backdrop_color(self):
+        """The app's background colour from the GTK theme (which follows the KDE colour
+        scheme), as 0xRRGGBB; Shale's #141414 if the theme doesn't name one."""
+        found, rgba = self.get_style_context().lookup_color("theme_bg_color")
+        if not found:
+            return 0x141414
+        r, g, b = (round(c * 255) for c in (rgba.red, rgba.green, rgba.blue))
+        return (r << 16) | (g << 8) | b
+
+    def _flatten(self, pixbuf):
+        color = self._backdrop_color()
+        return pixbuf.composite_color_simple(pixbuf.get_width(), pixbuf.get_height(),
+                                             GdkPixbuf.InterpType.NEAREST, 255, 64, color, color)
+
     def emit_image_failed(self, message=None):
         print("AsyncIcon could not read icon file contents for loading (%s): %s" % (self.path, message))
 
@@ -191,6 +211,9 @@ class AsyncImage(Gtk.Image):
 
         try:
             pixbuf = GdkPixbuf.Pixbuf.new_from_stream_finish(result)
+
+            if pixbuf and self.flatten and pixbuf.get_has_alpha():
+                pixbuf = self._flatten(pixbuf)
 
             if pixbuf:
                 scale = self.scale
