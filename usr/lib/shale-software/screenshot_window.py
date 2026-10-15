@@ -14,16 +14,16 @@ class ScreenshotWindow(Gtk.Window):
         Gtk.Window.__init__(self,
                             type=Gtk.WindowType.TOPLEVEL,
                             decorated=False,
-                            transient_for=parent,
-                            destroy_with_parent=True,
                             skip_taskbar_hint=True,
                             skip_pager_hint=True,
                             type_hint=Gdk.WindowTypeHint.DIALOG,
-                            modal=True,
                             name="ScreenshotWindow")
 
-        # A modal dialog of the main window, so KWin centres it over it.
-        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
+        # Not attached to the main window: KWin centres a dialog over its parent, which
+        # pushes a screenshot larger than the main window against the screen edge. On its
+        # own it's centred on the screen. (It closes when it loses focus, and the app
+        # destroys it when it moves on.)
+        self.set_position(Gtk.WindowPosition.CENTER)
         self.screen = Gdk.Screen.get_default()
 
         self.visual = self.screen.get_rgba_visual()

@@ -1014,6 +1014,7 @@ class Application(Gtk.Application):
 
         self.select_cursor = Gdk.Cursor.new_from_name(Gdk.Display.get_default(), "pointer")
         self.screenshot_window = None
+        self.pending_enlarged = None
 
         self.builder.get_object("previous_ss_button").connect("clicked", self.navigate_screenshot, Gtk.DirectionType.TAB_BACKWARD)
         self.builder.get_object("next_ss_button").connect("clicked", self.navigate_screenshot, Gtk.DirectionType.TAB_FORWARD)
@@ -1756,46 +1757,43 @@ class Application(Gtk.Application):
         else:
             image_location = screenshot.path
 
-        if self.screenshot_window is not None:
-            if self.screenshot_window.has_image(source_url):
-                self.screenshot_window.show_all()
-                self.screenshot_window.present()
-                return
-        else:
-            multiple_images = len(self.installer.get_screenshots(self.current_pkginfo)) > 1 or \
-                                  self.screenshot_stack.last > 1
-            self.screenshot_window = ScreenshotWindow(self.main_window, multiple_images)
-            # A fixed size the images are centred in: resizing a window to each image
-            # moves it off-centre on Wayland, where KWin keeps its top-left corner.
-            area = Gdk.Display.get_default().get_monitor_at_window(self.main_window.get_window()).get_workarea()
-            self.screenshot_window.set_default_size(int(area.width * .8), int(area.height * .8))
-            self.screenshot_window.show_all()
-            self.screenshot_window.present()
-            self.screenshot_window.connect("next-image", self.next_enlarged_screenshot_requested)
-            self.screenshot_window.connect("destroy", self.enlarged_screenshot_window_destroyed)
+        # One window per screenshot, made at the image's size once it has loaded. A window
+        # resized after it appears doesn't stay centred on Wayland (KWin keeps its top-left
+        # corner), so it gets its size first and KWin centres it over the main window.
+        # The current window (if any) stays until the next image is ready.
+        self.enlarged_multiple = len(self.installer.get_screenshots(self.current_pkginfo)) > 1 or \
+                                 self.screenshot_stack.last > 1
 
         monitor = Gdk.Display.get_default().get_monitor_at_window(self.main_window.get_window())
-
         work_area = monitor.get_workarea()
         enlarged = imaging.get_image_for_screenshot(image_location, work_area.width * .8, work_area.height * .8)
         enlarged.connect("image-loaded", self.enlarged_image_ready)
         enlarged.connect("image-failed", self.enlarged_image_failed)
+        self.pending_enlarged = enlarged  # keep it alive until it has loaded
         return Gdk.EVENT_STOP
 
     def enlarged_image_ready(self, image):
-        self.screenshot_window.add_image(image, image.path)
+        if image is not self.pending_enlarged:
+            return  # the user moved on to another screenshot meanwhile
+        self.pending_enlarged = None
+
+        self.destroy_screenshot_window()
+        window = ScreenshotWindow(self.main_window, self.enlarged_multiple)
+        window.connect("next-image", self.next_enlarged_screenshot_requested)
+        window.connect("destroy", self.enlarged_screenshot_window_destroyed)
+        window.set_default_size(int(image.width), int(image.height))
+        window.set_title(_("%s screenshot") % self.current_pkginfo.get_display_name())
+        self.screenshot_window = window
+        window.show_all()
+        window.present()
+        window.add_image(image, image.path)
 
     def enlarged_image_failed(self, image):
         # AsyncImage will be trying to load a fallback image next, make sure we don't get signaled for it.
         image.disconnect_by_func(self.enlarged_image_ready)
         image.destroy()
-
-        self.screenshot_window.set_busy(False)
-
-        # If a screenshot failed and it's the first one, there's an empty, invisible screenshot window
-        # in front of the main window, so destroy it.
-        if not self.screenshot_window.any_images():
-            self.screenshot_window.destroy()
+        if image is self.pending_enlarged:
+            self.pending_enlarged = None
 
     def enlarged_screenshot_window_destroyed(self, window):
         self.screenshot_window = None
