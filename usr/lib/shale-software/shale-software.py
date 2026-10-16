@@ -648,6 +648,7 @@ class Application(Gtk.Application):
         self.recursion_buster = False
 
         self.install_on_startup_file = None
+        self.show_on_startup = None
 
         self.review_cache = None
         self.current_pkginfo = None
@@ -713,6 +714,15 @@ class Application(Gtk.Application):
 
             print("MintInstall: file not found", args[2])
             sys.exit(1)
+        elif num == 3 and args[1] == "show":
+            # An app's page, from an appstream: link (Flathub's Install button).
+            app_id = appstream_link_to_id(args[2])
+            if self.gui_ready:
+                self.show_app_by_id(app_id)
+            else:
+                self.show_on_startup = app_id
+            self.activate()
+            return 0
         elif num > 1:
             print("MintInstall: Unknown arguments", args[1:])
             sys.exit(1)
@@ -2188,7 +2198,22 @@ class Application(Gtk.Application):
         if self.install_on_startup_file is not None:
             self.handle_command_line_install(self.install_on_startup_file)
 
+        if self.show_on_startup is not None:
+            self.show_app_by_id(self.show_on_startup)
+            self.show_on_startup = None
+
         return False
+
+    def show_app_by_id(self, app_id):
+        """Opens a Flatpak app's page by its ID, or searches for it if it isn't listed."""
+        matches = [info for info in self.installer.cache.get_subset_of_type("f").values()
+                   if info.name == app_id]
+        if matches:
+            matches.sort(key=lambda info: info.remote != "flathub")
+            self.show_package(matches[0], self.PAGE_LANDING)
+        elif app_id:
+            self.searchentry.set_text(app_id)
+            self.show_search_results(app_id)
 
     def get_installed_package_hashes(self):
         if self.installer.have_flatpak:
@@ -3233,6 +3258,16 @@ class DottedProgressLabel(Gtk.Fixed):
         x_offset = (parent_width - w) / 2
 
         self.move(self.label, x_offset, 0)
+
+def appstream_link_to_id(link):
+    """'appstream://org.gimp.GIMP.desktop' -> 'org.gimp.GIMP'."""
+    app_id = link
+    if app_id.lower().startswith("appstream:"):
+        app_id = app_id[len("appstream:"):]
+    app_id = app_id.lstrip("/").split("?")[0].split("#")[0].rstrip("/")
+    if app_id.endswith(".desktop"):
+        app_id = app_id[:-len(".desktop")]
+    return app_id
 
 if __name__ == "__main__":
     try:

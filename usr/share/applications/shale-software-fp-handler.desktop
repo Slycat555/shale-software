@@ -1,9 +1,9 @@
 [Desktop Entry]
 Name=Software Manager
-Comment=Opens Flatpak links in the Software Manager
+Comment=Opens Flatpak and app store links in the Software Manager
 Exec=shale-software-fp-handler %u
 Icon=shale-software
 Terminal=false
 Type=Application
 NoDisplay=true
-MimeType=application/vnd.flatpak.ref;application/vnd.flatpak.repo;x-scheme-handler/flatpak+https;x-scheme-handler/flatpak+http;
+MimeType=application/vnd.flatpak.ref;application/vnd.flatpak.repo;x-scheme-handler/flatpak+https;x-scheme-handler/flatpak+http;x-scheme-handler/appstream;
