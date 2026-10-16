@@ -23,9 +23,13 @@ DETAILS_ICON_SIZE = 64
 SCREENSHOT_HEIGHT = 351
 SCREENSHOT_WIDTH = 624
 
-MAX_THREADS = 2
+# Icons and screenshots get separate workers. One app's screenshots can take minutes
+# to download, and icons queued behind them stayed blank until they finished.
+ICON_THREADS = 4
+SCREENSHOT_THREADS = 2
 
-threadpool = ThreadPoolExecutor(max_workers=MAX_THREADS, thread_name_prefix="mintinstall-images")
+threadpool = ThreadPoolExecutor(max_workers=ICON_THREADS, thread_name_prefix="shale-software-icons")
+screenshot_pool = ThreadPoolExecutor(max_workers=SCREENSHOT_THREADS, thread_name_prefix="shale-software-screenshots")
 icon_surface_cache = {}
 
 def ui_scale(widget=None):
@@ -141,10 +145,18 @@ class AsyncImage(Gtk.Image):
             self.set_icon_string(FALLBACK_PACKAGE_ICON_PATH, self.original_width, self.original_height)
 
     def _fetch_url_thread(self, file):
+        # The pool drops exceptions silently, which left the icon blank for good.
+        try:
+            self._fetch_url(file)
+        except Exception as e:
+            GLib.idle_add(self.emit_image_failed, str(e))
+
+    def _fetch_url(self, file):
         data = None
         if file.get_uri().startswith("http"):
             try:
                 r = requests.get(file.get_uri(), stream=True, timeout=10)
+                r.raise_for_status()
 
                 if self.cancellable.is_cancelled():
                     return
@@ -200,7 +212,10 @@ class AsyncImage(Gtk.Image):
     def emit_image_failed(self, message=None):
         print("AsyncIcon could not read icon file contents for loading (%s): %s" % (self.path, message))
 
-        self.cancellable.cancel()
+        if self.cancellable:
+            self.cancellable.cancel()
+        if self.path == FALLBACK_PACKAGE_ICON_PATH:
+            return
         self.set_icon_string(FALLBACK_PACKAGE_ICON_PATH, self.original_width, self.original_height)
         self.emit("image-failed")
 
@@ -244,7 +259,7 @@ class ScreenshotDownloader():
         self.pkginfo = pkginfo
         self.settings = Gio.Settings(schema_id="org.shale.software")
         self.scale_factor = scale
-        threadpool.submit(self._download_screenshots_thread)
+        screenshot_pool.submit(self._download_screenshots_thread)
 
     def prefix_media_base_url(self, url):
         if (not url.startswith("http")) and self.pkginfo.remote == "flathub":
